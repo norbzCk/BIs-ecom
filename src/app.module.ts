@@ -4,6 +4,10 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { HealthController } from './health/health.controller.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { AuthModule } from './auth/auth.module.js';
+import { ProductsModule } from './products/products.module.js';
+import { CartModule } from './cart/cart.module.js';
+import { OrdersModule } from './orders/orders.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -17,6 +21,10 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       serviceId: 'billionare',
     }),
     PrismaModule,
+    AuthModule,
+    ProductsModule,
+    CartModule,
+    OrdersModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],
