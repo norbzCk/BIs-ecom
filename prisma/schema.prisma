@@ -61,9 +61,11 @@ model User {
   cart      Cart?
   orders    Order[]
 
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
+  @@index([deletedAt])
   @@map("users")
 }
 
