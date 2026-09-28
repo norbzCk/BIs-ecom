@@ -32,15 +32,31 @@ src/
   types/        Shared domain types (Product, CartLine, Review)
 ```
 
-## Screens implemented in this pass
+## Screens implemented
+
+Storefront (mock data for now, see `src/data/`):
 
 - Home
-- Shop / search results (with category, price, brand filters + product grid)
+- Shop / search results (category, price, brand filters + product grid)
 - Product detail (gallery, buy box, spec table)
 - Cart
 - Checkout (contact, address, delivery speed, payment, order summary, confirmation)
+- Account (tier status, recent shipments, primary address, payment method)
+
+Admin (wired to the real API, see the backend README's "Admin and catalog management"):
+
+- `/admin/login`: sign in; non-admin accounts are refused
+- `/admin/products`: product list with stock/status, and Discontinue
+- `/admin/products/new`: create a product with every required field (name, SKU, category,
+  price, images, starting stock) plus brand, model, description, status and specifications.
+  On a fresh install with no categories, the category creator opens automatically.
+
+Run the backend (`pnpm start:dev` in the repo root) alongside `pnpm --filter web dev`; the
+dev server proxies `/api` to it. The admin token is kept in `localStorage` under
+`billionare_admin_auth`.
 
 ## Not yet implemented
 
-Deals, Comparison, Order Tracking, Account, Wishlist, Help, Messages, and the full Admin panel
-are designed in Figma but not built yet — follow-up commits will add these.
+Deals, Comparison, Order Tracking, Wishlist, Help, Messages, admin Overview / Orders /
+Order detail / Support, editing an existing product from the UI (the `PATCH` endpoint
+exists), and wiring the storefront pages and Account to the real API.

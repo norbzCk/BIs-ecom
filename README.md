@@ -57,6 +57,73 @@ $ pnpm run test:e2e
 $ pnpm run test:cov
 ```
 
+## Admin and catalog management
+
+Admins manage the catalog through `/api/admin/*` (or the admin UI in `apps/web` at
+`/admin/login`). Every admin route requires a bearer token whose role is `ADMIN`
+(no token: `401`, customer token: `403`).
+
+### Creating the first admin
+
+`POST /api/auth/register` only ever creates `CUSTOMER` accounts, on purpose: there is no
+endpoint that grants admin, so nobody can promote themselves. Bootstrap the first admin
+from the database instead:
+
+1. Register normally: `POST /api/auth/register` with your name, email and password.
+2. Promote that account (Supabase SQL editor, `psql`, or Prisma Studio):
+
+   ```sql
+   UPDATE users SET role = 'ADMIN' WHERE email = 'you@example.com';
+   ```
+
+3. Sign in at `/admin/login` with the same credentials. Role is read from the JWT, so
+   sign in *after* promoting (a token issued earlier still says `CUSTOMER`).
+
+### Endpoints
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/admin/products` | List all products, any status (`status`, `search`, `category`, `brand`, `page`, `pageSize`) |
+| `GET` | `/api/admin/products/:id` | Full product for editing |
+| `POST` | `/api/admin/products` | Create a product |
+| `PATCH` | `/api/admin/products/:id` | Update; `images` / `specifications`, if sent, fully replace the existing ones |
+| `DELETE` | `/api/admin/products/:id` | Discontinue (soft delete), see below |
+| `POST` | `/api/admin/categories` | Create a category |
+| `PATCH` | `/api/admin/categories/:id` | Rename / re-describe |
+| `DELETE` | `/api/admin/categories/:id` | Delete (refused while products use it) |
+
+The public `GET /api/categories` and `GET /api/products` are unchanged and only ever
+show `ACTIVE` products.
+
+### What a product requires
+
+| Field | Rule |
+| --- | --- |
+| `name` | required, 1-200 chars |
+| `sku` | required, unique |
+| `categoryId` | required, must exist (create categories first) |
+| `price` | required, greater than 0 |
+| `images` | required, at least 1 valid URL. Exactly one is stored as primary: the first one marked `isPrimary`, otherwise the first image |
+| `inventory.quantity` | required, integer >= 0 (starting stock) |
+| `slug` | optional, unique; derived from `name` (`-2`, `-3` on collision) when omitted |
+| `brand`, `model`, `description`, `specifications[]`, `status` | optional (`status` defaults to `ACTIVE`) |
+
+Validation failures return `400` with one message per problem, and unknown fields are
+rejected. Duplicate `sku` / `slug` / category name return `409`.
+
+### Notes
+
+- **Deleting a product discontinues it** (`status = DISCONTINUED`) instead of removing the
+  row. Past orders reference products with no cascade, so a hard delete would fail for
+  any product that was ever ordered. Discontinued products disappear from the storefront
+  but stay in order history.
+- **Strict input types.** `ValidationPipe` runs without `enableImplicitConversion`, which
+  used to turn an object sent for a string field into the text `"[object Object]"`. Fields
+  that need a string-to-number conversion (query params, form prices) declare an explicit
+  `@Type(() => Number)`.
+- **Admin sessions are stateless JWTs.** Demoting or disabling an admin does not revoke a
+  token already issued; it stays valid until `JWT_EXPIRES_IN`. Keep that short if it matters.
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
