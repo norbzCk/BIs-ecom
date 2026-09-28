@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { decimalToNumber } from '../common/serialization/decimal-to-number.js';
@@ -8,7 +12,10 @@ const CART_INCLUDE = {
   items: {
     include: {
       product: {
-        include: { images: { orderBy: { isPrimary: 'desc' as const }, take: 1 } },
+        include: {
+          images: { orderBy: { isPrimary: 'desc' as const }, take: 1 },
+          inventory: true,
+        },
       },
     },
   },

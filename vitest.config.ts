@@ -11,5 +11,8 @@ export default defineConfig({
     root: './',
     include: ['**/*.spec.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
+    // bcryptjs is pure JS: 12 rounds costs ~7s per hash and blows the 5s
+    // default timeout. Production still uses 12 (see auth.service.ts).
+    env: { SALT_ROUNDS: '4' },
   },
 });

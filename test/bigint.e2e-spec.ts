@@ -33,7 +33,7 @@ describe('BigInt JSON serialization (e2e)', () => {
 
   it('serializes BigInt values instead of throwing', async () => {
     const response = await request(app.getHttpServer())
-      .get('/bigint-probe')
+      .get('/api/bigint-probe')
       .expect(200);
 
     expect(response.body).toEqual({

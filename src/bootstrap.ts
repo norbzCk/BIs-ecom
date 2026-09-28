@@ -17,6 +17,10 @@ export function configureApp(app: INestApplication): INestApplication {
     adapter.set('json replacer', bigintJsonReplacer);
   }
 
+  // Every route lives under /api so the apps/web dev proxy can forward /api/*
+  // straight through without a rewrite.
+  app.setGlobalPrefix('api');
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

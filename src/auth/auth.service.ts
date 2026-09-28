@@ -10,7 +10,26 @@ import type { RegisterDto } from './dto/register.dto.js';
 import type { LoginDto } from './dto/login.dto.js';
 import type { JwtPayload } from './jwt-payload.interface.js';
 
-const SALT_ROUNDS = 12;
+const DEFAULT_SALT_ROUNDS = 12;
+
+/**
+ * bcryptjs is pure JS, so cost scales steeply: 12 rounds takes ~7s on a
+ * mid-range laptop. Production keeps the default of 12; tests set
+ * SALT_ROUNDS=4 via `test.env` in vitest.config.ts so the suite stays fast.
+ */
+const SALT_ROUNDS = (() => {
+  const raw = process.env.SALT_ROUNDS;
+  if (raw === undefined || raw === '') {
+    return DEFAULT_SALT_ROUNDS;
+  }
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 4 || parsed > 15) {
+    throw new Error(
+      `SALT_ROUNDS must be an integer from 4 to 15, got "${raw}"`,
+    );
+  }
+  return parsed;
+})();
 
 export interface PublicUser {
   id: string;
