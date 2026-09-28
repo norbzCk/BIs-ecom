@@ -12,7 +12,7 @@ const categories = [
   { name: 'Mechanical Keyboards', count: 6 },
 ]
 
-const brandsList = ['NovaByte Pro', 'NovaView', 'ASUS', 'ASRock', 'Logitech']
+const brandsList = ['Billionare', 'ASUS', 'ASRock', 'Logitech']
 
 export function ShopPage() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
