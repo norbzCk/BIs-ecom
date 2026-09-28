@@ -21,12 +21,16 @@ export function configureApp(app: INestApplication): INestApplication {
   // straight through without a rewrite.
   app.setGlobalPrefix('api');
 
+  // No `enableImplicitConversion` on purpose: it coerces by the TypeScript
+  // type, so an object sent for a string field becomes the text
+  // "[object Object]" and passes @IsString(). Fields that legitimately arrive
+  // as strings but need a number (query params, form prices) opt in with an
+  // explicit @Type(() => Number) instead.
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
-      transformOptions: { enableImplicitConversion: true },
     }),
   );
 
