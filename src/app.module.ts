@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { ProductsModule } from './products/products.module.js';
 import { CartModule } from './cart/cart.module.js';
 import { OrdersModule } from './orders/orders.module.js';
+import { AdminModule } from './admin/admin.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -25,6 +26,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     ProductsModule,
     CartModule,
     OrdersModule,
+    AdminModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],
