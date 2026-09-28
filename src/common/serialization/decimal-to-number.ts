@@ -5,6 +5,8 @@
  * never exceeds Number.MAX_SAFE_INTEGER, so the precision loss from
  * converting here is not a concern.
  */
-export function decimalToNumber(value: { toNumber(): number } | number): number {
+export function decimalToNumber(
+  value: { toNumber(): number } | number,
+): number {
   return typeof value === 'number' ? value : value.toNumber();
 }
