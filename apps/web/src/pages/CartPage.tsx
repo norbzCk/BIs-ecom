@@ -1,141 +1,458 @@
-import { useState } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { SiteLayout } from '../components/SiteLayout'
 import { TrustBar } from '../components/TrustBar'
-import { useCart } from '../lib/cart-context'
-
-const SHIPPING_THRESHOLD = 150
-const TAX_RATE = 0.08
+import { Icon } from '../components/icons'
+import { Breadcrumbs, EmptyState, PriceTag, ProgressMeter, QuantityStepper } from '../components/ui'
+import { ProductCard } from '../components/ProductCard'
+import { DeviceArt } from '../components/ProductVisual'
+import {
+  FLAT_SHIPPING,
+  PROMO_HINT,
+  SHIPPING_THRESHOLD,
+  TAX_RATE,
+  useCart,
+} from '../lib/cart-context'
+import { Magnetic } from '../lib/motion/interactive'
+import { useToast } from '../lib/motion/toast'
+import { featuredProducts } from '../data/products'
+import type { ArtKind } from '../types'
+import { money, moneyExact } from '../lib/money'
 
 export function CartPage() {
-  const { cartProducts, setQuantity, removeItem, subtotal } = useCart()
-  const [promo, setPromo] = useState('')
+  const {
+    cartProducts,
+    savedProducts,
+    subtotal,
+    discount,
+    shipping,
+    tax,
+    total,
+    promo,
+    itemCount,
+    setQuantity,
+    removeItem,
+    moveToSaved,
+    moveToCart,
+    removeSaved,
+    applyPromo,
+    clearPromo,
+  } = useCart()
 
-  const shipping = subtotal > SHIPPING_THRESHOLD || subtotal === 0 ? 0 : 14.99
-  const tax = subtotal * TAX_RATE
-  const grandTotal = subtotal + shipping + tax
+  const { push } = useToast()
+  const [code, setCode] = useState('')
+  const [promoError, setPromoError] = useState<string | null>(null)
+
+  const toFreeShipping = Math.max(0, SHIPPING_THRESHOLD - subtotal)
+  const progress = Math.min(1, subtotal / SHIPPING_THRESHOLD)
+
+  const submitPromo = (e: React.FormEvent) => {
+    e.preventDefault()
+    const result = applyPromo(code, subtotal)
+    if (result.ok) {
+      setPromoError(null)
+      setCode('')
+      push({ tone: 'success', title: 'Promo applied', description: result.message })
+    } else {
+      setPromoError(result.message)
+    }
+  }
+
+  const suggestions = featuredProducts()
+    .filter((p) => !cartProducts.some((c) => c.product.id === p.id))
+    .slice(0, 4)
 
   return (
     <SiteLayout>
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-        <h1 className="text-2xl font-bold text-slate-900">Your Workspace Basket</h1>
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Cart' }]} />
+
+        <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-extrabold sm:text-3xl">Your cart</h1>
+            <p className="mt-2 text-sm text-ink-muted">
+              {itemCount === 0
+                ? 'Nothing here yet.'
+                : `${itemCount} ${itemCount === 1 ? 'item' : 'items'} reserved for the next 30 minutes.`}
+            </p>
+          </div>
+
+          {cartProducts.length > 0 && (
+            <Link to="/shop" className="btn-ghost btn-sm">
+              <Icon.ArrowRight className="size-3.5 rotate-180" />
+              Keep shopping
+            </Link>
+          )}
+        </div>
 
         {cartProducts.length === 0 ? (
-          <div className="mt-10 rounded-xl border border-slate-100 p-10 text-center">
-            <p className="text-sm text-slate-500">Your basket is empty.</p>
-            <Link
-              to="/shop"
-              className="mt-4 inline-block rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700"
-            >
-              Continue Shopping
-            </Link>
+          <div className="mt-10">
+            <EmptyState
+              icon={<Icon.Cart className="size-6" />}
+              title="Your cart is empty"
+              body="Nothing checked out yet. Browse the catalog and add anything that catches your eye — nothing here needs an account."
+              action={{ label: 'Start shopping', to: '/shop' }}
+            />
+
+            {suggestions.length > 0 && (
+              <div className="mt-14">
+                <h2 className="text-lg font-bold text-ink">Popular right now</h2>
+                <div className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
+                  {suggestions.map((product, i) => (
+                    <ProductCard key={product.id} product={product} index={i} />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
-          <div className="mt-6 grid gap-8 lg:grid-cols-[1fr_320px]">
-            <div className="space-y-3">
-              {cartProducts.map(({ product, quantity }) => (
-                <div
-                  key={product.id}
-                  className="flex gap-4 rounded-xl border border-slate-100 p-3"
-                >
-                  <div className="size-20 shrink-0 overflow-hidden rounded-lg bg-slate-900">
-                    <img
-                      src={product.images[0]?.url}
-                      alt={product.images[0]?.alt ?? product.name}
-                      className="size-full object-cover"
-                    />
-                  </div>
-                  <div className="flex flex-1 flex-col justify-between">
-                    <div className="flex items-start justify-between gap-3">
-                      <Link
-                        to={`/product/${product.slug}`}
-                        className="text-sm font-semibold text-slate-900 hover:text-brand-600"
-                      >
-                        {product.name}
-                      </Link>
-                      <span className="text-sm font-bold text-slate-900">
-                        ${(product.price * quantity).toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center rounded-lg border border-slate-200">
-                        <button
-                          onClick={() => setQuantity(product.id, quantity - 1)}
-                          className="px-2.5 py-1 text-slate-500 hover:text-slate-900"
-                          aria-label="Decrease quantity"
-                        >
-                          −
-                        </button>
-                        <span className="w-7 text-center text-sm font-semibold">{quantity}</span>
-                        <button
-                          onClick={() => setQuantity(product.id, quantity + 1)}
-                          className="px-2.5 py-1 text-slate-500 hover:text-slate-900"
-                          aria-label="Increase quantity"
-                        >
-                          +
-                        </button>
-                      </div>
-                      <div className="flex gap-3 text-xs">
-                        <button className="text-slate-400 hover:text-slate-600">Save for later</button>
-                        <button
-                          onClick={() => removeItem(product.id)}
-                          className="text-red-500 hover:text-red-600"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
+          <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_360px]">
+            {/* --------------------------------------------------- */}
+            {/*  Lines                                               */}
+            {/* --------------------------------------------------- */}
+            <div>
+              {/* Free shipping meter */}
+              <div className="panel p-4">
+                <div className="flex items-center gap-3">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400">
+                    <Icon.Truck className="size-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-ink">
+                      {toFreeShipping > 0 ? (
+                        <>
+                          Add <span className="text-emerald-300">${toFreeShipping.toFixed(2)}</span>{' '}
+                          more for free insured shipping
+                        </>
+                      ) : (
+                        <span className="text-emerald-300">
+                          You have unlocked free insured shipping
+                        </span>
+                      )}
+                    </p>
+                    <ProgressMeter value={progress} tone={toFreeShipping > 0 ? 'brand' : 'emerald'} className="mt-2" />
                   </div>
                 </div>
-              ))}
-
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  value={promo}
-                  onChange={(e) => setPromo(e.target.value)}
-                  placeholder="Have a Promotional Coupon? Tap directly to your retail account manager"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 placeholder:text-slate-400"
-                />
-                <button className="shrink-0 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">
-                  Apply
-                </button>
               </div>
+
+              <ul className="mt-4 space-y-3">
+                <AnimatePresence initial={false}>
+                  {cartProducts.map(({ product, quantity }) => (
+                    <motion.li
+                      key={product.id}
+                      layout
+                      initial={{ opacity: 0, y: 20, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, x: -60, height: 0, marginBottom: 0, filter: 'blur(6px)' }}
+                      transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+                      className="panel ring-gradient relative overflow-hidden p-3"
+                    >
+                      <div className="flex gap-4">
+                        <Link
+                          to={`/product/${product.slug}`}
+                          className="relative size-24 shrink-0 overflow-hidden rounded-xl sm:size-28"
+                          style={{
+                            background: `linear-gradient(140deg, hsl(${product.hue} 62% 20%), #070911)`,
+                          }}
+                        >
+                          <span
+                            className="absolute inset-0"
+                            style={{
+                              background: `radial-gradient(70% 70% at 30% 25%, hsl(${product.hue} 90% 55% / 0.5), transparent 70%)`,
+                            }}
+                          />
+                          <span className="absolute inset-0 flex items-center justify-center p-1.5">
+                            <CartThumb hue={product.hue} art={product.art} />
+                          </span>
+                        </Link>
+
+                        <div className="flex min-w-0 flex-1 flex-col">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <Link
+                                to={`/product/${product.slug}`}
+                                className="line-clamp-2 text-sm font-bold text-ink transition hover:text-brand-oncanvas"
+                              >
+                                {product.name}
+                              </Link>
+                              <p className="mt-1 text-[11px] text-ink-subtle">
+                                {product.brand} · {product.category}
+                              </p>
+                            </div>
+                            <PriceTag
+                              price={product.price * quantity}
+                              size="sm"
+                              className="shrink-0"
+                            />
+                          </div>
+
+                          <div className="mt-2 flex items-baseline gap-2">
+                            <span className="text-xs text-ink-subtle">
+                              {money(product.price)} each
+                            </span>
+                            {product.compareAtPrice && (
+                              <span className="text-[11px] text-emerald-400">
+                                saving {money((product.compareAtPrice - product.price) * quantity)}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-3">
+                            <QuantityStepper
+                              value={quantity}
+                              onChange={(q) => setQuantity(product.id, q)}
+                              size="sm"
+                            />
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => {
+                                  moveToSaved(product.id)
+                                  push({
+                                    title: 'Saved for later',
+                                    description: product.name,
+                                    action: { label: 'View saved', to: '/account?tab=saved' },
+                                  })
+                                }}
+                                className="btn-quiet btn-sm text-[11px]"
+                              >
+                                <Icon.Heart className="size-3.5" />
+                                Save
+                              </button>
+                              <button
+                                onClick={() => {
+                                  removeItem(product.id)
+                                  push({ title: 'Removed', description: product.name })
+                                }}
+                                className="btn-quiet btn-sm text-[11px] hover:text-rose-300"
+                              >
+                                <Icon.Trash className="size-3.5" />
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.li>
+                  ))}
+                </AnimatePresence>
+              </ul>
+
+              {/* Saved for later */}
+              {savedProducts.length > 0 && (
+                <div className="mt-8">
+                  <h2 className="flex items-center gap-2 text-sm font-bold text-ink">
+                    <Icon.Heart className="size-4 text-rose-400" />
+                    Saved for later
+                    <span className="rounded-md bg-surface-inset px-1.5 py-0.5 text-[11px] text-body">
+                      {savedProducts.length}
+                    </span>
+                  </h2>
+                  <ul className="mt-3 space-y-2">
+                    <AnimatePresence initial={false}>
+                      {savedProducts.map(({ product, quantity }) => (
+                        <motion.li
+                          key={product.id}
+                          layout
+                          initial={{ opacity: 0, x: 20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: 40, height: 0, marginBottom: 0 }}
+                          transition={{ duration: 0.35 }}
+                          className="panel flex items-center gap-3 p-3"
+                        >
+                          <span
+                            className="relative size-14 shrink-0 overflow-hidden rounded-lg"
+                            style={{
+                              background: `linear-gradient(140deg, hsl(${product.hue} 62% 20%), #070911)`,
+                            }}
+                          >
+                            <span
+                              className="absolute inset-0 flex items-center justify-center p-1"
+                              style={{
+                                background: `radial-gradient(70% 70% at 30% 25%, hsl(${product.hue} 90% 55% / 0.45), transparent 70%)`,
+                              }}
+                            >
+                              <CartThumb hue={product.hue} art={product.art} />
+                            </span>
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <Link
+                              to={`/product/${product.slug}`}
+                              className="line-clamp-1 text-sm font-semibold text-ink hover:text-brand-oncanvas"
+                            >
+                              {product.name}
+                            </Link>
+                            <p className="text-xs text-ink-subtle">
+                              {money(product.price)} · qty {quantity}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1">
+                            <button
+                              onClick={() => moveToCart(product.id)}
+                              className="btn-ghost btn-sm"
+                            >
+                              <Icon.Cart className="size-3.5" />
+                              Move
+                            </button>
+                            <button
+                              onClick={() => removeSaved(product.id)}
+                              aria-label={`Remove ${product.name} from saved items`}
+                              className="btn-quiet btn-sm hover:text-rose-300"
+                            >
+                              <Icon.Trash className="size-3.5" />
+                            </button>
+                          </div>
+                        </motion.li>
+                      ))}
+                    </AnimatePresence>
+                  </ul>
+                </div>
+              )}
             </div>
 
-            <aside className="h-fit rounded-xl border border-slate-100 p-5">
-              <h2 className="text-sm font-bold text-slate-900">Order Pricing Summary</h2>
-              <dl className="mt-4 space-y-2.5 text-sm">
-                <div className="flex justify-between text-slate-500">
-                  <dt>Subtotal ({cartProducts.length} items)</dt>
-                  <dd className="text-slate-900">${subtotal.toLocaleString()}</dd>
-                </div>
-                <div className="flex justify-between text-slate-500">
-                  <dt>Est. Fast Shipping</dt>
-                  <dd className={shipping === 0 ? 'font-semibold text-emerald-600' : 'text-slate-900'}>
+            {/* --------------------------------------------------- */}
+            {/*  Summary                                             */}
+            {/* --------------------------------------------------- */}
+            <aside className="lg:sticky lg:top-32 lg:self-start">
+              <div className="panel p-5">
+                <h2 className="text-sm font-bold text-ink">Order summary</h2>
+
+                <dl className="mt-4 space-y-2.5 text-sm">
+                  <Row label={`Subtotal (${itemCount} ${itemCount === 1 ? 'item' : 'items'})`}>
+                    {moneyExact(subtotal)}
+                  </Row>
+
+                  <AnimatePresence>
+                    {promo && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <Row label={`Discount · ${promo.code}`} tone="emerald">
+                          &minus;${discount.toFixed(2)}
+                        </Row>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <Row
+                    label="Insured shipping"
+                    tone={shipping === 0 ? 'emerald' : undefined}
+                  >
                     {shipping === 0 ? 'FREE' : `$${shipping.toFixed(2)}`}
-                  </dd>
+                  </Row>
+
+                  <Row label={`Sales tax (${(TAX_RATE * 100).toFixed(0)}%)`}>
+                    ${tax.toFixed(2)}
+                  </Row>
+                </dl>
+
+                <div className="mt-4 flex items-baseline justify-between border-t border-line pt-4">
+                  <span className="text-sm font-semibold text-body">Total</span>
+                  <motion.span
+                    key={total}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.35 }}
+                    className="font-display text-2xl font-extrabold text-ink"
+                  >
+                    ${total.toFixed(2)}
+                  </motion.span>
                 </div>
-                <div className="flex justify-between text-slate-500">
-                  <dt>Estimated Sales Tax (8%)</dt>
-                  <dd className="text-slate-900">${tax.toFixed(2)}</dd>
-                </div>
-              </dl>
-              <div className="mt-4 flex justify-between border-t border-slate-100 pt-4 text-base font-bold text-slate-900">
-                <span>Grand Total</span>
-                <span>${grandTotal.toFixed(2)}</span>
+
+                {/* Promo */}
+                <form onSubmit={submitPromo} className="mt-5">
+                  <label htmlFor="promo" className="label">
+                    Promotional code
+                  </label>
+
+                  {promo ? (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/12 px-3 py-2.5"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <Icon.Check className="size-4 shrink-0 text-emerald-400" />
+                        <span className="min-w-0">
+                          <span className="block text-sm font-bold text-emerald-200">
+                            {promo.code}
+                          </span>
+                          <span className="block truncate text-[11px] text-emerald-300/80">
+                            {promo.label}
+                          </span>
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          clearPromo()
+                          setPromoError(null)
+                        }}
+                        aria-label="Remove promo code"
+                        className="shrink-0 text-emerald-300 transition hover:text-ink"
+                      >
+                        <Icon.X className="size-4" />
+                      </button>
+                    </motion.div>
+                  ) : (
+                    <>
+                      <div className="mt-2 flex gap-2">
+                        <input
+                          id="promo"
+                          value={code}
+                          onChange={(e) => {
+                            setCode(e.target.value)
+                            setPromoError(null)
+                          }}
+                          placeholder="Enter code"
+                          className="input"
+                        />
+                        <button type="submit" className="btn-ghost shrink-0">
+                          Apply
+                        </button>
+                      </div>
+                      <AnimatePresence>
+                        {promoError && (
+                          <motion.p
+                            initial={{ opacity: 0, y: -6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0 }}
+                            className="mt-2 flex items-start gap-1.5 text-[11px] text-rose-300"
+                          >
+                            <Icon.Alert className="mt-px size-3.5 shrink-0" />
+                            {promoError}
+                          </motion.p>
+                        )}
+                      </AnimatePresence>
+                      <p className="mt-2 text-[11px] text-ink-subtle">{PROMO_HINT}</p>
+                    </>
+                  )}
+                </form>
+
+                <Magnetic strength={0.18} className="mt-5 w-full">
+                  <Link to="/checkout" className="btn-primary sheen w-full px-6 py-3.5 text-base">
+                    <Icon.Shield className="size-4" />
+                    Proceed to checkout
+                  </Link>
+                </Magnetic>
+
+                <p className="mt-3 text-center text-[11px] text-ink-subtle">
+                  {shipping > 0
+                    ? `Shipping is $${FLAT_SHIPPING.toFixed(2)} — free over $${SHIPPING_THRESHOLD}.`
+                    : 'Free insured shipping applied.'}
+                </p>
               </div>
-              <Link
-                to="/checkout"
-                className="mt-4 block rounded-lg bg-brand-600 py-2.5 text-center text-sm font-semibold text-white hover:bg-brand-700"
-              >
-                Proceed to Checkout
-              </Link>
-              <p className="mt-3 flex items-center gap-1.5 text-xs text-slate-400">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="size-3.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 3v5c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3z" />
-                </svg>
-                Safe, Secure Checkout. Direct Warranties Verified.
-              </p>
+
+              <div className="panel mt-3 flex items-start gap-3 p-4">
+                <Icon.Info className="mt-0.5 size-4 shrink-0 text-brand-oncanvas" />
+                <p className="text-xs leading-relaxed text-ink-muted">
+                  This is a demonstration storefront. No payment is taken and no card details are
+                  stored — the card field accepts any formatted value.
+                </p>
+              </div>
             </aside>
           </div>
         )}
@@ -144,4 +461,33 @@ export function CartPage() {
       <TrustBar />
     </SiteLayout>
   )
+}
+
+/* -------------------------------------------------------------------------- */
+
+function Row({
+  label,
+  children,
+  tone,
+}: {
+  label: string
+  children: ReactNode
+  tone?: 'emerald'
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <dt className="text-ink-subtle">{label}</dt>
+      <dd
+        className={`font-semibold ${
+          tone === 'emerald' ? 'text-emerald-400' : 'text-body tabular-nums'
+        }`}
+      >
+        {children}
+      </dd>
+    </div>
+  )
+}
+
+function CartThumb({ hue, art }: { hue: number; art: ArtKind }) {
+  return <DeviceArt kind={art} hue={hue} className="size-full" />
 }

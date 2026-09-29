@@ -143,57 +143,57 @@ export function AdminProductEditorPage() {
 
   return (
     <div className="max-w-3xl">
-      <h1 className="text-xl font-bold text-slate-900">Add New Product</h1>
-      <p className="mt-1 text-sm text-slate-500">
+      <h1 className="text-xl font-bold text-ink">Add New Product</h1>
+      <p className="mt-1 text-sm text-ink-subtle">
         Every field marked required must be filled in before this product can be saved.
       </p>
 
       {error && (
-        <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
+        <p className="mt-4 rounded-lg bg-red-500/12 px-3 py-2 text-sm text-red-400">{error}</p>
       )}
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-6">
-        <div className="grid gap-4 rounded-xl border border-slate-200 bg-white p-5 sm:grid-cols-2">
-          <label className="block text-xs font-medium text-slate-500 sm:col-span-2">
+        <div className="grid gap-4 rounded-xl border border-line-faint bg-surface p-5 sm:grid-cols-2">
+          <label className="block text-xs font-medium text-ink-subtle sm:col-span-2">
             Product Name *
             <input
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500"
+              className="mt-1 w-full rounded-lg border border-line-faint bg-canvas-raised px-3 py-2 text-sm outline-none focus:border-brand-500"
               placeholder="Billionare Apex-15 Pro"
             />
           </label>
 
-          <label className="block text-xs font-medium text-slate-500">
+          <label className="block text-xs font-medium text-ink-subtle">
             SKU *
             <input
               required
               value={sku}
               onChange={(e) => setSku(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500"
+              className="mt-1 w-full rounded-lg border border-line-faint bg-canvas-raised px-3 py-2 text-sm outline-none focus:border-brand-500"
               placeholder="NB-APEX15-PRO"
             />
           </label>
 
-          <label className="block text-xs font-medium text-slate-500">
+          <label className="block text-xs font-medium text-ink-subtle">
             Slug (optional — auto-generated from name if left blank)
             <input
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500"
+              className="mt-1 w-full rounded-lg border border-line-faint bg-canvas-raised px-3 py-2 text-sm outline-none focus:border-brand-500"
               placeholder="billionare-apex-15-pro"
             />
           </label>
 
-          <div className="text-xs font-medium text-slate-500">
+          <div className="text-xs font-medium text-ink-subtle">
             <label className="block">
               Category *
               <select
                 required
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500"
+                className="mt-1 w-full rounded-lg border border-line-faint bg-canvas-raised px-3 py-2 text-sm outline-none focus:border-brand-500"
               >
                 {!categoriesLoaded && <option value="">Loading categories…</option>}
                 {categoriesLoaded && categories.length === 0 && (
@@ -208,7 +208,7 @@ export function AdminProductEditorPage() {
             </label>
 
             {showNewCategory ? (
-              <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+              <div className="mt-2 rounded-lg border border-line-faint bg-canvas p-2">
                 <div className="flex gap-2">
                   <input
                     aria-label="New category name"
@@ -223,7 +223,7 @@ export function AdminProductEditorPage() {
                       }
                     }}
                     placeholder="e.g. Mechanical Keyboards"
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-brand-500"
+                    className="w-full rounded-lg border border-line-faint bg-surface px-3 py-1.5 text-sm outline-none focus:border-brand-500"
                   />
                   <button
                     type="button"
@@ -240,13 +240,13 @@ export function AdminProductEditorPage() {
                         setShowNewCategory(false)
                         setCategoryError(null)
                       }}
-                      className="shrink-0 text-xs font-semibold text-slate-500 hover:underline"
+                      className="shrink-0 text-xs font-semibold text-ink-subtle hover:underline"
                     >
                       Cancel
                     </button>
                   )}
                 </div>
-                {categoryError && <p className="mt-1.5 text-xs text-red-600">{categoryError}</p>}
+                {categoryError && <p className="mt-1.5 text-xs text-red-400">{categoryError}</p>}
               </div>
             ) : (
               <button
@@ -259,8 +259,8 @@ export function AdminProductEditorPage() {
             )}
           </div>
 
-          <label className="block text-xs font-medium text-slate-500">
-            Price (USD) *
+          <label className="block text-xs font-medium text-ink-subtle">
+            Price (TSh) *
             <input
               required
               type="number"
@@ -268,37 +268,37 @@ export function AdminProductEditorPage() {
               step="0.01"
               value={price}
               onChange={(e) => setPrice(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500"
+              className="mt-1 w-full rounded-lg border border-line-faint bg-canvas-raised px-3 py-2 text-sm outline-none focus:border-brand-500"
               placeholder="1699.00"
             />
           </label>
 
-          <label className="block text-xs font-medium text-slate-500">
+          <label className="block text-xs font-medium text-ink-subtle">
             Brand
             <input
               value={brand}
               onChange={(e) => setBrand(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500"
+              className="mt-1 w-full rounded-lg border border-line-faint bg-canvas-raised px-3 py-2 text-sm outline-none focus:border-brand-500"
               placeholder="Billionare"
             />
           </label>
 
-          <label className="block text-xs font-medium text-slate-500">
+          <label className="block text-xs font-medium text-ink-subtle">
             Model
             <input
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500"
+              className="mt-1 w-full rounded-lg border border-line-faint bg-canvas-raised px-3 py-2 text-sm outline-none focus:border-brand-500"
               placeholder="Apex-15 Pro"
             />
           </label>
 
-          <label className="block text-xs font-medium text-slate-500">
+          <label className="block text-xs font-medium text-ink-subtle">
             Status
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as typeof status)}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500"
+              className="mt-1 w-full rounded-lg border border-line-faint bg-canvas-raised px-3 py-2 text-sm outline-none focus:border-brand-500"
             >
               {STATUS_OPTIONS.map((opt) => (
                 <option key={opt} value={opt}>
@@ -308,7 +308,7 @@ export function AdminProductEditorPage() {
             </select>
           </label>
 
-          <label className="block text-xs font-medium text-slate-500">
+          <label className="block text-xs font-medium text-ink-subtle">
             Starting Stock Quantity *
             <input
               required
@@ -316,25 +316,25 @@ export function AdminProductEditorPage() {
               min="0"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500"
+              className="mt-1 w-full rounded-lg border border-line-faint bg-canvas-raised px-3 py-2 text-sm outline-none focus:border-brand-500"
             />
           </label>
 
-          <label className="block text-xs font-medium text-slate-500 sm:col-span-2">
+          <label className="block text-xs font-medium text-ink-subtle sm:col-span-2">
             Description
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500"
+              className="mt-1 w-full rounded-lg border border-line-faint bg-canvas-raised px-3 py-2 text-sm outline-none focus:border-brand-500"
             />
           </label>
         </div>
 
         {/* Images */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="rounded-xl border border-line-faint bg-surface p-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-900">Product Images *</h2>
+            <h2 className="text-sm font-bold text-ink">Product Images *</h2>
             <button
               type="button"
               onClick={() => setImages((rows) => [...rows, { url: '', isPrimary: false }])}
@@ -343,7 +343,7 @@ export function AdminProductEditorPage() {
               + Add image
             </button>
           </div>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-ink-subtle">
             At least one image URL is required. Mark one as primary — it's used as the catalog thumbnail.
           </p>
           <div className="mt-3 space-y-2">
@@ -353,9 +353,9 @@ export function AdminProductEditorPage() {
                   value={row.url}
                   onChange={(e) => updateImage(i, { url: e.target.value })}
                   placeholder="https://example.com/product.jpg"
-                  className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500"
+                  className="flex-1 rounded-lg border border-line-faint bg-canvas-raised px-3 py-2 text-sm outline-none focus:border-brand-500"
                 />
-                <label className="flex items-center gap-1.5 text-xs text-slate-500">
+                <label className="flex items-center gap-1.5 text-xs text-ink-subtle">
                   <input
                     type="radio"
                     name="primary-image"
@@ -391,9 +391,9 @@ export function AdminProductEditorPage() {
         </div>
 
         {/* Specifications */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="rounded-xl border border-line-faint bg-surface p-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-900">Technical Specifications</h2>
+            <h2 className="text-sm font-bold text-ink">Technical Specifications</h2>
             <button
               type="button"
               onClick={() => setSpecs((rows) => [...rows, { name: '', value: '' }])}
@@ -409,13 +409,13 @@ export function AdminProductEditorPage() {
                   value={row.name}
                   onChange={(e) => updateSpec(i, { name: e.target.value })}
                   placeholder="e.g. Processor & Architecture"
-                  className="w-56 rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500"
+                  className="w-56 rounded-lg border border-line-faint bg-canvas-raised px-3 py-2 text-sm outline-none focus:border-brand-500"
                 />
                 <input
                   value={row.value}
                   onChange={(e) => updateSpec(i, { value: e.target.value })}
                   placeholder="e.g. Intel Core i9-13900H"
-                  className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500"
+                  className="flex-1 rounded-lg border border-line-faint bg-canvas-raised px-3 py-2 text-sm outline-none focus:border-brand-500"
                 />
                 {specs.length > 1 && (
                   <button
@@ -435,7 +435,7 @@ export function AdminProductEditorPage() {
           <button
             type="button"
             onClick={() => navigate('/admin/products')}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+            className="rounded-lg border border-line-faint px-4 py-2 text-sm font-semibold text-ink-muted hover:bg-canvas"
           >
             Cancel
           </button>

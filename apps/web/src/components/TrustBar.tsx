@@ -1,74 +1,64 @@
-const items = [
+import { motion } from 'motion/react'
+import { Link } from 'react-router-dom'
+import { Stagger, StaggerItem } from '../lib/motion/reveal'
+import { Icon, type IconName } from './icons'
+
+const ITEMS: { title: string; body: string; icon: IconName; to: string }[] = [
   {
-    title: 'Trust Verified',
-    body: '100% authentic tech and direct manufacturer warranties',
-    icon: (
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M12 3l7 3v5c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3z"
-      />
-    ),
+    title: 'Verified stock',
+    body: 'Every unit inspected and logged before it ships',
+    icon: 'Shield',
+    to: '/support#warranty',
   },
   {
-    title: 'Express Dispatch',
-    body: 'Same day packaging with global express couriers',
-    icon: (
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M3 7h11v8H3zM14 10h4l3 3v2h-7zM6.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM17.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"
-      />
-    ),
+    title: 'Express dispatch',
+    body: 'Same-day packaging with insured global couriers',
+    icon: 'Truck',
+    to: '/support#shipping',
   },
   {
-    title: '24/7 Expert Support',
-    body: 'Get tech advising from experienced system builders',
-    icon: (
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M12 19a7 7 0 100-14 7 7 0 000 14zM12 8v4l3 2"
-      />
-    ),
+    title: 'Direct warranty',
+    body: 'Manufacturer coverage, handled by us — no paperwork',
+    icon: 'Award',
+    to: '/support#warranty',
   },
   {
-    title: 'Hassle-Free Returns',
-    body: '30-day money-back guarantee with zero restocking fee',
-    icon: (
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M4 4v5h5M4 9a8 8 0 1 1 2.3 5.7"
-      />
-    ),
+    title: '30-day returns',
+    body: 'Money back, no restocking fee, prepaid label',
+    icon: 'Refresh',
+    to: '/support#returns',
   },
 ]
 
 export function TrustBar() {
   return (
-    <div className="border-y border-slate-100 bg-white">
-      <div className="mx-auto grid max-w-6xl grid-cols-2 gap-6 px-4 py-6 sm:grid-cols-4 sm:gap-4">
-        {items.map((item) => (
-          <div key={item.title} className="flex items-start gap-3">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.8}
-                className="size-5"
-              >
-                {item.icon}
-              </svg>
-            </span>
-            <div>
-              <p className="text-sm font-semibold text-slate-900">{item.title}</p>
-              <p className="text-xs leading-snug text-slate-500">{item.body}</p>
-            </div>
-          </div>
-        ))}
-      </div>
+    <div className="relative border-y border-line-faint bg-canvas-raised/40">
+      <Stagger
+        className="mx-auto grid max-w-7xl grid-cols-2 gap-x-6 gap-y-8 px-4 py-10 sm:px-6 lg:grid-cols-4 lg:px-8"
+        stagger={0.08}
+      >
+        {ITEMS.map((item) => {
+          const I = Icon[item.icon]
+          return (
+            <StaggerItem key={item.title}>
+              <Link to={item.to} className="group flex items-start gap-3.5">
+                <span className="relative flex size-11 shrink-0 items-center justify-center rounded-xl border border-line bg-linear-to-b from-surface-inset to-transparent text-brand-oncanvas transition-all duration-500 group-hover:border-brand-400/60 group-hover:text-brand-oncanvas">
+                  <I className="size-5" />
+                  <motion.span
+                    className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100"
+                    style={{ boxShadow: '0 0 0 1px rgb(91 118 255 / 0.5), 0 0 28px -6px rgb(91 118 255 / 0.8)' }}
+                    whileHover={{ opacity: 1 }}
+                  />
+                </span>
+                <div>
+                  <p className="text-sm font-bold text-ink">{item.title}</p>
+                  <p className="mt-0.5 text-xs leading-snug text-ink-subtle">{item.body}</p>
+                </div>
+              </Link>
+            </StaggerItem>
+          )
+        })}
+      </Stagger>
     </div>
   )
 }

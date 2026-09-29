@@ -6,8 +6,8 @@ export function AdminDashboardPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-slate-900">Operations Overview</h1>
-      <p className="mt-1 text-sm text-slate-500">
+      <h1 className="text-xl font-bold text-ink">Operations Overview</h1>
+      <p className="mt-1 text-sm text-ink-subtle">
         Welcome back, {user?.firstName}. Product catalog management is ready to use.
       </p>
 
@@ -18,7 +18,7 @@ export function AdminDashboardPage() {
         Go to Product Catalog →
       </Link>
 
-      <p className="mt-4 text-xs text-slate-400">
+      <p className="mt-4 text-xs text-ink-subtle">
         Order management, support, and full dashboard metrics aren't built yet — this pass
         focuses on product catalog CRUD.
       </p>

@@ -1,23 +1,605 @@
 @import 'tailwindcss';
 
 @theme {
-  --font-display: 'Outfit', system-ui, sans-serif;
-  --color-brand-50: #eff6ff;
-  --color-brand-100: #dbeafe;
-  --color-brand-500: #2563eb;
-  --color-brand-600: #1d4ed8;
-  --color-brand-700: #1e40af;
-  --color-navy-900: #0b1220;
-  --color-navy-800: #111a2e;
-  --color-navy-700: #182238;
+  --font-display: 'Sora', 'Outfit', system-ui, sans-serif;
+  --font-sans: 'Outfit', system-ui, sans-serif;
+
+  /* Brand ramp — electric indigo */
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-200: #c7d2fe;
+  --color-brand-300: #a5b4fc;
+  --color-brand-400: #7f95ff;
+  --color-brand-500: #5b76ff;
+  --color-brand-600: #4557e6;
+  --color-brand-700: #3941b8;
+  --color-brand-800: #313791;
+  --color-brand-900: #2c3170;
+
+  /* Accent ramp — signal cyan */
+  --color-accent-300: #7ee9f8;
+  --color-accent-400: #38d6ee;
+  --color-accent-500: #14b8d4;
+  --color-accent-600: #0891b2;
+
+  /* Canvas — deep space navy */
+  --color-navy-950: #04050a;
+  --color-navy-900: #070911;
+  --color-navy-850: #0a0d18;
+  --color-navy-800: #0e1220;
+  --color-navy-700: #151a2c;
+  --color-navy-600: #1e2438;
+  --color-navy-500: #2a3150;
+
+  --shadow-glow: 0 0 0 1px rgb(91 118 255 / 0.28), 0 18px 50px -12px rgb(91 118 255 / 0.45);
+  --shadow-lift: 0 24px 60px -20px rgb(0 0 0 / 0.75), 0 0 0 1px rgb(255 255 255 / 0.06);
+  --shadow-inset-line: inset 0 1px 0 0 rgb(255 255 255 / 0.07);
+
+  /* ---- Semantic surface + ink tokens ----
+     Every themed surface, border and text colour resolves through these, so
+     the two themes are a single set of values rather than a `dark:` variant
+     sprinkled across every component. Dark is the default; `.light` on <html>
+     remaps them. Alpha channels are kept as separate tokens because the same
+     white/4 that reads as a lifted surface in dark mode has to become a
+     black/4 wash in light mode to stay visible against white. */
+  --color-canvas: #04050a;
+  --color-canvas-raised: #0a0d18;
+  --color-surface: #0e1220;
+  --color-surface-glass: rgb(255 255 255 / 4%);
+  --color-surface-glass-hover: rgb(255 255 255 / 10%);
+  --color-surface-inset: rgb(255 255 255 / 5%);
+  --color-line: rgb(255 255 255 / 9%);
+  --color-line-strong: rgb(255 255 255 / 18%);
+  --color-line-faint: rgb(255 255 255 / 12%);
+  --color-ink: #f8fafc;
+  --color-body: #cbd5e1;
+  --color-ink-muted: #94a3b8;
+  --color-ink-subtle: #64748b;
+  --color-ink-faint: #475569;
+  --color-ink-onbrand: #ffffff;
+  /* Accent ink for small text on the canvas. brand-200 is legible on navy but
+     too pale on white, so light mode steps it down the ramp. */
+  --color-brand-oncanvas: var(--color-brand-200);
+  --color-grid-line: rgb(255 255 255 / 0.045);
+  --color-divider-glow: rgb(255 255 255 / 0.14);
+  --color-skeleton-a: #0e1220;
+  --color-skeleton-b: #151a2c;
+  --color-shadow-ambient: rgb(0 0 0 / 0.75);
+  --color-panel-shadow: rgb(0 0 0 / 0.9);
+  --color-noise-blend: overlay;
+  --color-noise-opacity: 0.35;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --animate-marquee: marquee 38s linear infinite;
+  --animate-marquee-slow: marquee 70s linear infinite;
+  --animate-drift-a: drift-a 22s ease-in-out infinite;
+  --animate-drift-b: drift-b 28s ease-in-out infinite;
+  --animate-drift-c: drift-c 19s ease-in-out infinite;
+  --animate-shimmer: shimmer 2.4s linear infinite;
+  --animate-float-slow: float-slow 7s ease-in-out infinite;
+  --animate-pulse-ring: pulse-ring 2.8s var(--ease-out-expo) infinite;
+  --animate-gradient-x: gradient-x 6s ease infinite;
+  --animate-spin-slow: spin 18s linear infinite;
+  --animate-rise: rise 0.7s var(--ease-out-expo) both;
+  --animate-blink: blink 1.05s steps(2, start) infinite;
+}
+
+/* ---- Light theme ----
+   Same token names, light values. Declared after @theme so these win for
+   utilities compiled against var(--color-*). */
+:root.light {
+  --color-canvas: #f6f7fb;
+  --color-canvas-raised: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-glass: rgb(15 23 42 / 3.5%);
+  --color-surface-glass-hover: rgb(15 23 42 / 6%);
+  --color-surface-inset: rgb(15 23 42 / 4%);
+  --color-line: rgb(15 23 42 / 10%);
+  --color-line-strong: rgb(15 23 42 / 18%);
+  --color-line-faint: rgb(15 23 42 / 8%);
+  --color-ink: #0b1020;
+  --color-body: #2b3447;
+  --color-ink-muted: #4a5568;
+  --color-ink-subtle: #64748b;
+  --color-ink-faint: #94a3b8;
+  --color-ink-onbrand: #ffffff;
+  --color-brand-oncanvas: var(--color-brand-700);
+  --color-grid-line: rgb(15 23 42 / 0.05);
+  --color-divider-glow: rgb(15 23 42 / 0.12);
+  --color-skeleton-a: #e8ebf3;
+  --color-skeleton-b: #f1f3f9;
+  --color-shadow-ambient: rgb(15 23 42 / 0.18);
+  --color-panel-shadow: rgb(15 23 42 / 0.1);
+  --color-noise-blend: multiply;
+  --color-noise-opacity: 0.2;
+
+  --shadow-lift: 0 24px 60px -24px rgb(15 23 42 / 0.22), 0 0 0 1px rgb(15 23 42 / 0.05);
+  --shadow-inset-line: inset 0 1px 0 0 rgb(255 255 255 / 0.9);
+
+  color-scheme: light;
+}
+
+@keyframes marquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@keyframes drift-a {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(8%, -10%, 0) scale(1.18);
+  }
+}
+
+@keyframes drift-b {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1.1);
+  }
+  50% {
+    transform: translate3d(-12%, 8%, 0) scale(0.92);
+  }
+}
+
+@keyframes drift-c {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(0.95);
+  }
+  50% {
+    transform: translate3d(10%, 12%, 0) scale(1.25);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.7;
+  }
+  70% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+
+@keyframes gradient-x {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
 }
 
 @layer base {
+  * {
+    border-color: var(--color-line);
+  }
+
   html {
-    font-family: var(--font-display);
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+    color-scheme: dark;
+  }
+  :root.light html,
+  html.light {
+    color-scheme: light;
   }
 
   body {
-    @apply bg-white text-slate-900 antialiased;
+    @apply bg-canvas font-sans text-body antialiased;
+    background-image:
+      radial-gradient(
+        ellipse 80% 50% at 50% -10%,
+        rgb(91 118 255 / 0.16) 0%,
+        transparent 60%
+      ),
+      radial-gradient(
+        ellipse 60% 40% at 100% 0%,
+        rgb(20 184 212 / 0.09) 0%,
+        transparent 55%
+      );
+    background-attachment: fixed;
+    text-rendering: optimizeLegibility;
+    transition:
+      background-color 0.35s var(--ease-out-expo),
+      color 0.35s var(--ease-out-expo);
+  }
+  :root.light body {
+    background-image:
+      radial-gradient(
+        ellipse 80% 50% at 50% -10%,
+        rgb(91 118 255 / 0.14) 0%,
+        transparent 60%
+      ),
+      radial-gradient(ellipse 60% 40% at 100% 0%, rgb(20 184 212 / 0.1) 0%, transparent 55%);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-display text-ink;
+    letter-spacing: -0.022em;
+  }
+
+  ::selection {
+    background: --alpha(var(--color-brand-500) / 45%);
+    color: white;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand-400);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 11px;
+    height: 11px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--color-canvas);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-line-strong);
+    border-radius: 99px;
+    border: 3px solid var(--color-canvas);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-ink-subtle);
+  }
+
+  /* Fades the top of the page under the sticky header anchor offset. */
+  html {
+    scroll-padding-top: 6.5rem;
+  }
+}
+
+/* Shared button base. Declared as a @utility so btn-primary / btn-ghost /
+   btn-quiet can @apply it — Tailwind only allows @apply against utilities. */
+@utility btn {
+  @apply relative inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold whitespace-nowrap select-none;
+  transition:
+    transform 0.28s var(--ease-spring),
+    box-shadow 0.35s var(--ease-out-expo),
+    background-color 0.25s ease,
+    color 0.25s ease,
+    border-color 0.25s ease;
+
+  &:disabled {
+    @apply pointer-events-none opacity-50;
+  }
+}
+
+@layer components {
+  /* ---- Surfaces ---- */
+  .glass {
+    background: var(--color-surface-glass);
+    backdrop-filter: blur(18px) saturate(160%);
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    border: 1px solid var(--color-line);
+  }
+
+  .panel {
+    @apply rounded-2xl border border-line bg-surface/80 backdrop-blur-xl;
+    box-shadow: var(--shadow-inset-line), 0 20px 45px -30px var(--color-panel-shadow);
+  }
+
+  /* Gradient hairline border that catches the light on hover. */
+  .ring-gradient {
+    position: relative;
+  }
+  .ring-gradient::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      140deg,
+      --alpha(var(--color-brand-400) / 70%),
+      --alpha(var(--color-accent-400) / 25%) 40%,
+      transparent 70%
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 0.45s var(--ease-out-expo);
+    pointer-events: none;
+  }
+  .ring-gradient:hover::before,
+  .ring-gradient:focus-within::before {
+    opacity: 1;
+  }
+
+  /* ---- Typography helpers ---- */
+  .gradient-text {
+    /* Clip is applied to the background, so the ramp needs dark-theme and
+       light-theme variants — a white-to-cyan ramp vanishes on a white page. */
+    background-image: linear-gradient(
+      100deg,
+      #ffffff 0%,
+      var(--color-brand-300) 38%,
+      var(--color-accent-300) 68%,
+      #ffffff 100%
+    );
+    background-size: 220% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: var(--animate-gradient-x);
+  }
+  :root.light .gradient-text {
+    background-image: linear-gradient(
+      100deg,
+      var(--color-brand-700) 0%,
+      var(--color-brand-500) 38%,
+      var(--color-accent-600) 68%,
+      var(--color-brand-700) 100%
+    );
+  }
+
+  .eyebrow {
+    @apply inline-flex items-center gap-2 rounded-full border border-line-faint bg-surface-glass px-3 py-1 text-[11px] font-semibold tracking-[0.18em] text-brand-oncanvas uppercase;
+    backdrop-filter: blur(8px);
+  }
+
+  /* ---- Buttons ----
+     `btn` is a @utility (not a plain class) so the variants below can
+     @apply it — Tailwind only allows @apply against real utilities. */
+  .btn-primary {
+    @apply btn text-ink-onbrand;
+    background: linear-gradient(120deg, var(--color-brand-600), var(--color-brand-500) 55%, var(--color-accent-500));
+    background-size: 180% 180%;
+    box-shadow:
+      0 1px 0 0 rgb(255 255 255 / 0.22) inset,
+      0 12px 30px -12px rgb(91 118 255 / 0.85);
+  }
+  .btn-primary:hover {
+    background-position: 100% 50%;
+    transform: translateY(-2px);
+    box-shadow:
+      0 1px 0 0 rgb(255 255 255 / 0.3) inset,
+      0 20px 45px -14px rgb(91 118 255 / 0.95);
+  }
+  .btn-primary:active {
+    transform: translateY(0) scale(0.98);
+  }
+
+  .btn-ghost {
+    @apply btn border border-line-faint bg-surface-glass text-ink backdrop-blur-md;
+  }
+  .btn-ghost:hover {
+    @apply border-line-strong bg-surface-glass-hover text-ink;
+    transform: translateY(-2px);
+  }
+  .btn-ghost:active {
+    transform: translateY(0) scale(0.98);
+  }
+
+  .btn-quiet {
+    @apply btn text-ink-muted;
+  }
+  .btn-quiet:hover {
+    @apply bg-surface-glass-hover text-ink;
+  }
+
+  .btn-sm {
+    @apply px-3.5 py-2 text-[13px];
+  }
+
+  /* Sheen that sweeps across a button on hover. */
+  .sheen::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+      110deg,
+      transparent 20%,
+      rgb(255 255 255 / 0.35) 50%,
+      transparent 80%
+    );
+    transform: translateX(-120%);
+    transition: transform 0.75s var(--ease-out-expo);
+    pointer-events: none;
+  }
+  .sheen:hover::after {
+    transform: translateX(120%);
+  }
+
+  /* ---- Form controls ---- */
+  .input {
+    @apply w-full rounded-xl border border-line-faint bg-canvas-raised/70 px-3.5 py-2.5 text-sm text-ink outline-none;
+    transition:
+      border-color 0.25s ease,
+      box-shadow 0.25s ease,
+      background-color 0.25s ease;
+  }
+  .input::placeholder {
+    @apply text-ink-faint;
+  }
+  .input:hover {
+    @apply border-line-strong;
+  }
+  .input:focus {
+    @apply border-brand-400 bg-canvas-raised;
+    box-shadow: 0 0 0 4px rgb(91 118 255 / 0.16);
+  }
+
+  .label {
+    @apply block text-[11px] font-semibold tracking-[0.14em] text-ink-muted uppercase;
+  }
+
+  select.input {
+    @apply cursor-pointer appearance-none bg-canvas-raised pr-9;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.7rem center;
+    background-size: 1rem;
+  }
+
+  /* ---- Chips / badges ---- */
+  .chip {
+    @apply inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-line-faint bg-surface-glass px-3 py-1.5 text-xs font-medium text-ink-muted;
+    transition:
+      background-color 0.25s ease,
+      border-color 0.25s ease,
+      color 0.25s ease,
+      transform 0.25s var(--ease-spring);
+  }
+  .chip:hover {
+    @apply border-line-strong bg-surface-glass-hover text-ink;
+    transform: translateY(-1px);
+  }
+  .chip[data-active='true'] {
+    @apply border-brand-400/60 bg-brand-500/18 text-brand-oncanvas;
+    box-shadow: 0 0 0 1px rgb(91 118 255 / 0.35), 0 8px 20px -12px rgb(91 118 255 / 0.8);
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold tracking-wide;
+  }
+
+  /* ---- Decorative ---- */
+  .grid-lines {
+    background-image:
+      linear-gradient(to right, var(--color-grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--color-grid-line) 1px, transparent 1px);
+    background-size: 64px 64px;
+  }
+
+  .noise {
+    position: relative;
+  }
+  .noise::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: var(--color-noise-opacity);
+    mix-blend-mode: var(--color-noise-blend);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  }
+
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--color-skeleton-a) 0%,
+      var(--color-skeleton-b) 40%,
+      var(--color-skeleton-a) 80%
+    );
+    background-size: 200% 100%;
+    animation: var(--animate-shimmer);
+  }
+
+  .divider-glow {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--color-divider-glow) 20%,
+      rgb(91 118 255 / 0.5) 50%,
+      var(--color-divider-glow) 80%,
+      transparent
+    );
+  }
+
+  /* Fades the edges of a horizontally scrolling rail. */
+  .mask-fade-x {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 8%,
+      #000 92%,
+      transparent
+    );
+    mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+  }
+
+  .link-underline {
+    background-image: linear-gradient(currentColor, currentColor);
+    background-size: 0% 1px;
+    background-position: 0 100%;
+    background-repeat: no-repeat;
+    transition: background-size 0.4s var(--ease-out-expo);
+  }
+  .link-underline:hover {
+    background-size: 100% 1px;
+  }
+
+  /* Screen-reader only, but still focusable (skip links). */
+  .sr-only-focusable {
+    @apply sr-only;
+  }
+  .sr-only-focusable:focus {
+    @apply not-sr-only fixed top-3 left-3 z-[100] rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
   }
 }

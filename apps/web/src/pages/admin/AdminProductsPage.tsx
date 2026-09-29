@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAdminAuth } from '../../lib/admin-auth-context'
 import { apiRequest, ApiError } from '../../lib/api-client'
+import { money } from '../../lib/money'
 
 interface AdminProductSummary {
   id: string
@@ -22,7 +23,7 @@ interface AdminProductsResponse {
 const STATUS_STYLES: Record<AdminProductSummary['status'], string> = {
   ACTIVE: 'bg-emerald-100 text-emerald-700',
   OUT_OF_STOCK: 'bg-amber-100 text-amber-700',
-  DISCONTINUED: 'bg-slate-200 text-slate-500',
+  DISCONTINUED: 'bg-surface-inset text-ink-muted',
 }
 
 export function AdminProductsPage() {
@@ -75,8 +76,8 @@ export function AdminProductsPage() {
     <div>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Product Catalog Workspace</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1 className="text-xl font-bold text-ink">Product Catalog Workspace</h1>
+          <p className="mt-1 text-sm text-ink-subtle">
             Create, edit, and manage system catalog components.
           </p>
         </div>
@@ -89,12 +90,12 @@ export function AdminProductsPage() {
       </div>
 
       {error && (
-        <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
+        <p className="mt-4 rounded-lg bg-red-500/12 px-3 py-2 text-sm text-red-400">{error}</p>
       )}
 
-      <div className="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="mt-5 overflow-hidden rounded-xl border border-line-faint bg-surface">
         <table className="w-full text-left text-sm">
-          <thead className="border-b border-slate-100 bg-slate-50 text-xs uppercase text-slate-400">
+          <thead className="border-b border-line-faint bg-canvas text-xs uppercase text-ink-subtle">
             <tr>
               <th className="px-4 py-3 font-semibold">Product</th>
               <th className="px-4 py-3 font-semibold">SKU</th>
@@ -105,28 +106,28 @@ export function AdminProductsPage() {
               <th className="px-4 py-3 font-semibold" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-line-faint">
             {loading && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-ink-subtle">
                   Loading products…
                 </td>
               </tr>
             )}
             {!loading && data?.items.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-ink-subtle">
                   No products yet. Add your first one.
                 </td>
               </tr>
             )}
             {data?.items.map((product) => (
               <tr key={product.id}>
-                <td className="px-4 py-3 font-medium text-slate-900">{product.name}</td>
-                <td className="px-4 py-3 text-slate-500">{product.sku}</td>
-                <td className="px-4 py-3 text-slate-500">{product.category}</td>
-                <td className="px-4 py-3 text-slate-900">${product.price.toLocaleString()}</td>
-                <td className="px-4 py-3 text-slate-500">{product.stockQuantity} units</td>
+                <td className="px-4 py-3 font-medium text-ink">{product.name}</td>
+                <td className="px-4 py-3 text-ink-subtle">{product.sku}</td>
+                <td className="px-4 py-3 text-ink-subtle">{product.category}</td>
+                <td className="px-4 py-3 text-ink">{money(product.price)}</td>
+                <td className="px-4 py-3 text-ink-subtle">{product.stockQuantity} units</td>
                 <td className="px-4 py-3">
                   <span
                     className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_STYLES[product.status]}`}
@@ -152,7 +153,7 @@ export function AdminProductsPage() {
       </div>
 
       {data && (
-        <p className="mt-3 text-xs text-slate-400">Showing 1–{data.items.length} of {data.total} items</p>
+        <p className="mt-3 text-xs text-ink-subtle">Showing 1–{data.items.length} of {data.total} items</p>
       )}
     </div>
   )
