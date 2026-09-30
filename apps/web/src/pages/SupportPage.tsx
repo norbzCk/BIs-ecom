@@ -43,7 +43,7 @@ const FAQS = [
   },
   {
     q: 'Do I need an account to buy?',
-    a: 'No. You can check out as a guest. Creating an account only adds order history, saved addresses and a wishlist that follows you between visits.',
+    a: 'Yes, you need an account to place an order, because the order history is tied to it. You can fill in the checkout form first and sign in when you are ready to pay.',
     group: 'orders' as Channel,
   },
   {

@@ -8,7 +8,7 @@ import { Icon } from '../components/icons'
 import { StarRating } from '../components/StarRating'
 import { Breadcrumbs, EmptyState, Section, SectionTitle } from '../components/ui'
 import type { Product } from '../types'
-import { CATEGORIES, products } from '../data/products'
+import { useCatalog, discountPercent, isNew } from '../lib/catalog'
 import { Counter } from '../lib/motion/counter'
 import { Magnetic } from '../lib/motion/interactive'
 import { Reveal, Stagger, StaggerItem } from '../lib/motion/reveal'
@@ -16,21 +16,22 @@ import { useToast } from '../lib/motion/toast'
 import { useCart } from '../lib/cart-context'
 import { money, SYMBOL } from '../lib/money'
 
-type Band = 'all' | 'bestsellers' | 'clearance' | 'openbox'
+type Band = 'all' | 'bestsellers' | 'clearance' | 'recent'
 
 const BANDS: { id: Band; label: string; blurb: string }[] = [
   { id: 'all', label: 'Everything on deal', blurb: 'Every active price drop, in one place.' },
   { id: 'bestsellers', label: 'Bestsellers', blurb: 'What people actually buy most often.' },
   { id: 'clearance', label: 'Clearance', blurb: 'Last units, lowest price, while stock lasts.' },
-  { id: 'openbox', label: 'Open box', blurb: 'Refurbished units with a full-year warranty.' },
+  { id: 'recent', label: 'New in', blurb: 'Just landed, and worth an early look.' },
 ]
 
+/** Percentage off today, or 0 when the product is not reduced. */
 function discountOf(product: Product) {
-  if (!product.compareAtPrice) return 0
-  return Math.round((1 - product.price / product.compareAtPrice) * 100)
+  return discountPercent(product) ?? 0
 }
 
 export function DealsPage() {
+  const { products, categories } = useCatalog()
   const [band, setBand] = useState<Band>('all')
   const { addItem } = useCart()
   const { push } = useToast()
@@ -40,18 +41,21 @@ export function DealsPage() {
     switch (band) {
       case 'bestsellers':
         return all
-          .filter((p) => p.featured || p.rating >= 4.8)
+          .filter((p) => p.featured || (p.rating ?? 0) >= 4.8)
           .sort((a, b) => b.reviewCount - a.reviewCount)
       case 'clearance':
         return all.filter((p) => p.stock > 0 && p.stock <= 12).sort((a, b) => a.stock - b.stock)
-      case 'openbox':
-        return all.filter((p) => (p.condition ?? '').toLowerCase().includes('open box'))
+      case 'recent':
+        return all.filter((p) => isNew(p)).sort((a, b) => b.reviewCount - a.reviewCount)
       default:
         return all.sort((a, b) => discountOf(b) - discountOf(a))
     }
-  }, [band])
+  }, [band, products])
 
-  const deepest = deals.reduce((best, p) => (discountOf(p) > discountOf(best) ? p : best), deals[0])
+  const deepest = deals.reduce<Product | undefined>(
+    (best, p) => (discountOf(p) > discountOf(best as Product) ? p : best),
+    deals[0],
+  )
   const averageSaving =
     deals.reduce((sum, p) => sum + (p.compareAtPrice ? p.compareAtPrice - p.price : 0), 0) /
     Math.max(1, deals.length)
@@ -227,10 +231,10 @@ export function DealsPage() {
           lede="Some things are already priced right. These are the ones we would build a desk around."
         />
         <Stagger className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" stagger={0.08}>
-          {CATEGORIES.slice(0, 3).map((category) => {
+          {categories.slice(0, 3).map((category) => {
             const picks = products
               .filter((p) => p.category === category.name)
-              .sort((a, b) => b.rating - a.rating)[0]
+              .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))[0]
             if (!picks) return null
             return (
               <StaggerItem key={category.name}>
@@ -243,13 +247,20 @@ export function DealsPage() {
                       {category.name}
                     </p>
                     <p className="mt-3 text-sm leading-relaxed text-ink-muted">
-                      {category.blurb}
+                      {category.description ??
+                        `Everything we stock in ${category.name}, hand-picked by the team.`}
                     </p>
                   </div>
                   <div className="flex items-end justify-between gap-4">
                     <div className="min-w-0">
                       <p className="line-clamp-2 text-sm font-bold text-ink">{picks.name}</p>
-                      <StarRating rating={picks.rating} reviewCount={picks.reviewCount} size="sm" />
+                      {picks.rating !== null && (
+                        <StarRating
+                          rating={picks.rating}
+                          reviewCount={picks.reviewCount}
+                          size="sm"
+                        />
+                      )}
                     </div>
                     <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-line-faint text-body transition group-hover:border-brand-400 group-hover:bg-brand-500 group-hover:text-ink">
                       <Icon.ArrowRight className="size-4" />

@@ -8,7 +8,7 @@ export default defineConfig({
     globals: true,
     root: './',
     include: ['**/*.e2e-spec.ts'],
-    exclude: ['**/node_modules/**', '**/dist/**'],
+    exclude: ['**/node_modules/**', '**/dist/**', '**/.kilo/**', '**/.opencode/**'],
     // Loads .env so PrismaService can read DATABASE_URL outside main.ts.
     setupFiles: ['./test/setup.ts'],
     // These specs boot the real AppModule and hit DATABASE_URL, which is a

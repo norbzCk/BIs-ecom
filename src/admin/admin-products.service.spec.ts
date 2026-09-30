@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { AdminProductsService } from './admin-products.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { SupabaseStorageService } from '../storage/supabase-storage.service.js';
 
 function decimal(value: number) {
   return { toNumber: () => value };
@@ -20,10 +21,18 @@ function buildProductRow(overrides: Partial<Record<string, unknown>> = {}) {
     model: 'Apex-15 Pro',
     description: 'A workstation laptop.',
     price: decimal(1699),
+    compareAtPrice: null,
+    rating: null,
+    reviewCount: 0,
+    badge: null,
+    featured: false,
+    releasedAt: null,
+    highlights: [],
     status: 'ACTIVE',
     category: { id: 2n, name: 'Computers & Laptops' },
     images: [{ imageUrl: 'https://example.com/1.jpg', isPrimary: true }],
     specifications: [{ name: 'CPU', value: 'Intel Core i9' }],
+    reviews: [],
     inventory: { quantity: 10, reserved: 0 },
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-02T00:00:00.000Z'),
@@ -53,6 +62,10 @@ describe('AdminProductsService', () => {
     };
     category: { findUnique: ReturnType<typeof vi.fn> };
   };
+  let storage: {
+    toBucketPath: ReturnType<typeof vi.fn>;
+    removeImages: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(() => {
     prisma = {
@@ -67,7 +80,15 @@ describe('AdminProductsService', () => {
       category: { findUnique: vi.fn() },
     };
 
-    service = new AdminProductsService(prisma as unknown as PrismaService);
+    storage = {
+      toBucketPath: vi.fn().mockReturnValue(null),
+      removeImages: vi.fn().mockResolvedValue(undefined),
+    };
+
+    service = new AdminProductsService(
+      prisma as unknown as PrismaService,
+      storage as unknown as SupabaseStorageService,
+    );
   });
 
   describe('create', () => {
@@ -135,6 +156,67 @@ describe('AdminProductsService', () => {
           data: expect.objectContaining({ slug: 'billionare-apex-15-pro-2' }),
         }),
       );
+    });
+
+    it('persists the merchandising fields and reviews', async () => {
+      prisma.category.findUnique.mockResolvedValue({
+        id: 2n,
+        name: 'Computers & Laptops',
+      });
+      prisma.product.findUnique.mockResolvedValue(null);
+      prisma.product.create.mockResolvedValue(
+        buildProductRow({ rating: decimal(4.8) }),
+      );
+
+      await service.create({
+        ...validCreateDto,
+        compareAtPrice: 2099,
+        rating: 4.8,
+        reviewCount: 12,
+        badge: 'Top-tier selection',
+        featured: true,
+        releasedAt: '2026-08-14T00:00:00.000Z',
+        highlights: ['Sustained 4.2GHz'],
+        reviews: [
+          { author: 'Marcus Vance', role: 'CTO', rating: 5, quote: 'Immaculate.' },
+        ],
+      });
+
+      expect(prisma.product.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            compareAtPrice: 2099,
+            rating: 4.8,
+            reviewCount: 12,
+            badge: 'Top-tier selection',
+            featured: true,
+            releasedAt: new Date('2026-08-14T00:00:00.000Z'),
+            highlights: ['Sustained 4.2GHz'],
+            reviews: {
+              create: [
+                {
+                  author: 'Marcus Vance',
+                  role: 'CTO',
+                  rating: 5,
+                  quote: 'Immaculate.',
+                },
+              ],
+            },
+          }),
+        }),
+      );
+    });
+
+    it('refuses a compare-at price that is not above the price', async () => {
+      prisma.category.findUnique.mockResolvedValue({
+        id: 2n,
+        name: 'Computers & Laptops',
+      });
+
+      await expect(
+        service.create({ ...validCreateDto, price: 1699, compareAtPrice: 1500 }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.product.create).not.toHaveBeenCalled();
     });
 
     describe('primary image normalization', () => {
@@ -237,6 +319,7 @@ describe('AdminProductsService', () => {
       const tx = {
         productImage: { deleteMany: vi.fn() },
         productSpecification: { deleteMany: vi.fn() },
+        review: { deleteMany: vi.fn() },
         product: {
           update: vi
             .fn()
@@ -277,6 +360,93 @@ describe('AdminProductsService', () => {
       );
       expect(result.name).toBe('Updated');
     });
+
+    it('replaces reviews only when they are sent', async () => {
+      prisma.product.findUnique.mockResolvedValue(buildProductRow());
+      const tx = {
+        productImage: { deleteMany: vi.fn() },
+        productSpecification: { deleteMany: vi.fn() },
+        review: { deleteMany: vi.fn() },
+        product: {
+          update: vi.fn().mockResolvedValue(buildProductRow()),
+        },
+      };
+      prisma.$transaction.mockImplementation(
+        async (cb: (tx: unknown) => unknown) => cb(tx),
+      );
+
+      await service.update('1', {
+        reviews: [{ author: 'Priya Raman', rating: 4, quote: 'Reads true.' }],
+      });
+
+      expect(tx.review.deleteMany).toHaveBeenCalledWith({
+        where: { productId: 1n },
+      });
+      expect(tx.product.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            reviews: {
+              create: [
+                { author: 'Priya Raman', role: undefined, rating: 4, quote: 'Reads true.' },
+              ],
+            },
+          }),
+        }),
+      );
+    });
+
+    it('deletes the files behind images the update dropped', async () => {
+      prisma.product.findUnique.mockResolvedValue(
+        buildProductRow({
+          images: [
+            { imageUrl: 'https://cdn.test/aa/old-1.jpg', isPrimary: true },
+            { imageUrl: 'https://cdn.test/aa/old-2.jpg', isPrimary: false },
+          ],
+        }),
+      );
+      const tx = {
+        productImage: { deleteMany: vi.fn() },
+        productSpecification: { deleteMany: vi.fn() },
+        review: { deleteMany: vi.fn() },
+        product: { update: vi.fn().mockResolvedValue(buildProductRow()) },
+      };
+      prisma.$transaction.mockImplementation(
+        async (cb: (tx: unknown) => unknown) => cb(tx),
+      );
+      storage.toBucketPath.mockImplementation((url: string) =>
+        url.replace('https://cdn.test/aa/', ''),
+      );
+
+      await service.update('1', {
+        images: [{ url: 'https://cdn.test/aa/old-1.jpg' }],
+      });
+
+      expect(storage.removeImages).toHaveBeenCalledWith(['old-2.jpg']);
+    });
+
+    it('never asks Storage to delete a URL that is not in our bucket', async () => {
+      prisma.product.findUnique.mockResolvedValue(
+        buildProductRow({
+          images: [{ imageUrl: 'https://elsewhere.test/x.jpg', isPrimary: true }],
+        }),
+      );
+      const tx = {
+        productImage: { deleteMany: vi.fn() },
+        productSpecification: { deleteMany: vi.fn() },
+        review: { deleteMany: vi.fn() },
+        product: { update: vi.fn().mockResolvedValue(buildProductRow()) },
+      };
+      prisma.$transaction.mockImplementation(
+        async (cb: (tx: unknown) => unknown) => cb(tx),
+      );
+      storage.toBucketPath.mockReturnValue(null);
+
+      await service.update('1', {
+        images: [{ url: 'https://cdn.test/aa/new.jpg' }],
+      });
+
+      expect(storage.removeImages).toHaveBeenCalledWith([]);
+    });
   });
 
   describe('archive', () => {
@@ -311,6 +481,7 @@ describe('AdminProductsService', () => {
         category: 'Computers & Laptops',
         price: 1699,
         status: 'ACTIVE',
+        imageUrl: 'https://example.com/1.jpg',
         stockQuantity: 10,
         updatedAt: buildProductRow().updatedAt,
       });

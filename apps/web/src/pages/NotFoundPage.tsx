@@ -5,7 +5,7 @@ import { Icon } from '../components/icons'
 import { Section } from '../components/ui'
 import { Magnetic } from '../lib/motion/interactive'
 import { Stagger, StaggerItem } from '../lib/motion/reveal'
-import { CATEGORIES, products } from '../data/products'
+import { useCatalog } from '../lib/catalog'
 import { SHIPPING_THRESHOLD } from '../lib/cart-context'
 import { money } from '../lib/money'
 
@@ -18,6 +18,7 @@ const SUGGESTIONS = [
 
 export function NotFoundPage() {
   const { pathname } = useLocation()
+  const { categories, products } = useCatalog()
 
   return (
     <SiteLayout>
@@ -122,7 +123,7 @@ export function NotFoundPage() {
               Popular categories
             </p>
             <div className="mt-3 flex flex-wrap justify-center gap-2">
-              {CATEGORIES.map((category) => (
+              {categories.map((category) => (
                 <Link
                   key={category.name}
                   to={`/shop?category=${encodeURIComponent(category.name)}`}

@@ -136,15 +136,23 @@ export function AdminProductsPage() {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right">
-                  {product.status !== 'DISCONTINUED' && (
-                    <button
-                      onClick={() => handleArchive(product.id)}
-                      disabled={busyId === product.id}
-                      className="text-xs font-semibold text-red-500 hover:underline disabled:opacity-50"
+                  <div className="flex items-center justify-end gap-3">
+                    <Link
+                      to={`/admin/products/${product.id}`}
+                      className="text-xs font-semibold text-brand-600 hover:underline"
                     >
-                      Discontinue
-                    </button>
-                  )}
+                      Edit
+                    </Link>
+                    {product.status !== 'DISCONTINUED' && (
+                      <button
+                        onClick={() => handleArchive(product.id)}
+                        disabled={busyId === product.id}
+                        className="text-xs font-semibold text-red-500 hover:underline disabled:opacity-50"
+                      >
+                        Discontinue
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

@@ -27,10 +27,18 @@ function buildProductRow(overrides: Record<string, unknown> = {}) {
     model: 'Apex-15 Pro',
     description: 'A workstation laptop.',
     price: decimal(1699),
+    compareAtPrice: null,
+    rating: null,
+    reviewCount: 0,
+    badge: null,
+    featured: false,
+    releasedAt: null,
+    highlights: [],
     status: 'ACTIVE',
     category: { id: 2n, name: 'Computers & Laptops' },
     images: [{ imageUrl: 'https://example.com/1.jpg', isPrimary: true }],
     specifications: [{ name: 'CPU', value: 'Intel Core i9' }],
+    reviews: [],
     inventory: { quantity: 10, reserved: 0 },
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-02T00:00:00.000Z'),
@@ -64,9 +72,11 @@ describe('Admin products (HTTP)', () => {
       findUnique: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      aggregate: vi.fn(),
     },
     user: { findUnique: vi.fn(), create: vi.fn() },
     category: {
+      findMany: vi.fn(),
       findUnique: vi.fn(),
       findFirst: vi.fn(),
       create: vi.fn(),
@@ -471,11 +481,24 @@ describe('Admin products (HTTP)', () => {
 
   describe('public GET /api/products query parsing', () => {
     beforeEach(() => {
-      prismaMock.$transaction.mockResolvedValue([[], 0]);
+      // findMany batches two queries: a 2-op transaction for the page of
+      // products and a 3-op one for the brand/category/price facets. Dispatching
+      // on the operation count keeps this working no matter how many requests
+      // a test makes, and survives requests rejected before the service runs.
+      prismaMock.$transaction.mockReset();
+      prismaMock.$transaction.mockImplementation((ops: unknown[]) =>
+        Promise.resolve(
+          ops.length === 3
+            ? [[], [], { _min: { price: null }, _max: { price: null } }]
+            : [[], 0],
+        ),
+      );
     });
 
-    const lastFindManyArgs = () =>
-      prismaMock.product.findMany.mock.calls.at(-1)?.[0] as {
+    // The product page is the first findMany call; the facets query reuses
+    // findMany afterwards, so the last call is not the one under test.
+    const pageQueryArgs = () =>
+      prismaMock.product.findMany.mock.calls[0]?.[0] as {
         skip: number;
         take: number;
         orderBy: unknown;
@@ -489,27 +512,53 @@ describe('Admin products (HTTP)', () => {
         )
         .expect(200);
 
-      const args = lastFindManyArgs();
+      const args = pageQueryArgs();
       expect(args.skip).toBe(10); // (page 3 - 1) * pageSize 5
       expect(args.take).toBe(5);
-      expect(args.orderBy).toEqual({ price: 'asc' });
+      expect(args.orderBy).toEqual([{ price: 'asc' }]);
       expect(args.where.price).toEqual({ gte: 10, lte: 500 });
     });
 
     it('applies defaults when no params are given', async () => {
       await request(app.getHttpServer()).get('/api/products').expect(200);
 
-      const args = lastFindManyArgs();
+      const args = pageQueryArgs();
       expect(args.skip).toBe(0);
       expect(args.take).toBe(12);
+    });
+
+    it('returns the filter facets alongside the page', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/products')
+        .expect(200);
+
+      expect(res.body.facets).toEqual({
+        brands: [],
+        categories: [],
+        priceRange: { min: 0, max: 0 },
+      });
+    });
+
+    it('only treats featured=true as a featured filter', async () => {
+      await request(app.getHttpServer())
+        .get('/api/products?featured=true')
+        .expect(200);
+      expect(pageQueryArgs().where).toMatchObject({ featured: true });
+
+      prismaMock.product.findMany.mockClear();
+      await request(app.getHttpServer())
+        .get('/api/products?featured=false')
+        .expect(200);
+      expect(pageQueryArgs().where).toMatchObject({ featured: false });
     });
 
     it.each([
       'page=abc',
       'page=0',
-      'pageSize=49',
+      'pageSize=101',
       'minPrice=-5',
       'sort=random',
+      'featured=maybe',
     ])('rejects invalid query "%s" with 400', async (qs) => {
       await request(app.getHttpServer()).get(`/api/products?${qs}`).expect(400);
     });

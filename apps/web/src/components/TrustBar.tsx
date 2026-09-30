@@ -11,8 +11,8 @@ const ITEMS: { title: string; body: string; icon: IconName; to: string }[] = [
     to: '/support#warranty',
   },
   {
-    title: 'Express dispatch',
-    body: 'Same-day packaging with insured global couriers',
+    title: 'Insured delivery',
+    body: 'Tracked couriers with insurance on every parcel',
     icon: 'Truck',
     to: '/support#shipping',
   },

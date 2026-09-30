@@ -5,62 +5,51 @@ import { ProductCard } from '../components/ProductCard'
 import { SiteLayout } from '../components/SiteLayout'
 import { TrustBar } from '../components/TrustBar'
 import { Icon } from '../components/icons'
-import { EmptyState, ProgressMeter } from '../components/ui'
-import { products } from '../data/products'
+import { EmptyState } from '../components/ui'
+import { useCatalog } from '../lib/catalog'
 import { useAccount, type Address, type Order, type OrderStatus } from '../lib/account-context'
 import { useCart } from '../lib/cart-context'
 import { Counter } from '../lib/motion/counter'
 import { Magnetic } from '../lib/motion/interactive'
 import { Stagger, StaggerItem } from '../lib/motion/reveal'
 import { useToast } from '../lib/motion/toast'
-import { money, moneyExact, SYMBOL } from '../lib/money'
+import { money, SYMBOL } from '../lib/money'
 
-type Tab = 'overview' | 'orders' | 'addresses' | 'payments' | 'rewards' | 'saved'
+type Tab = 'overview' | 'orders' | 'addresses' | 'saved'
 
-const TABS: { id: Tab; label: string; icon: 'User' | 'Package' | 'Pin' | 'Card' | 'Award' | 'Heart' }[] = [
+const TABS: { id: Tab; label: string; icon: 'User' | 'Package' | 'Pin' | 'Heart' }[] = [
   { id: 'overview', label: 'Overview', icon: 'User' },
   { id: 'orders', label: 'Orders', icon: 'Package' },
   { id: 'addresses', label: 'Addresses', icon: 'Pin' },
-  { id: 'payments', label: 'Payments', icon: 'Card' },
-  { id: 'rewards', label: 'Rewards', icon: 'Award' },
   { id: 'saved', label: 'Saved', icon: 'Heart' },
 ]
 
 const STATUS_META: Record<OrderStatus, { label: string; tone: string; step: number }> = {
+  PENDING: { label: 'Awaiting payment', tone: 'bg-amber-500/15 text-amber-300', step: 0 },
+  CONFIRMED: { label: 'Confirmed', tone: 'bg-slate-500/15 text-body', step: 1 },
   PROCESSING: { label: 'Processing', tone: 'bg-slate-500/15 text-body', step: 1 },
-  PACKED: { label: 'Packed', tone: 'bg-amber-500/15 text-amber-300', step: 2 },
   SHIPPED: { label: 'Shipped', tone: 'bg-sky-500/15 text-sky-300', step: 3 },
   DELIVERED: { label: 'Delivered', tone: 'bg-emerald-500/15 text-emerald-300', step: 4 },
+  CANCELLED: { label: 'Cancelled', tone: 'bg-rose-500/15 text-rose-300', step: 0 },
 }
 
-const FLOW: OrderStatus[] = ['PROCESSING', 'PACKED', 'SHIPPED', 'DELIVERED']
+const FLOW: OrderStatus[] = ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED']
 
-const TIERS = [
-  { name: 'Member', at: 0, perk: 'Earn 1 point per TSh 1,000' },
-  { name: 'Professional', at: 2_500, perk: 'Priority support, early access' },
-  { name: 'Elite', at: 10_000, perk: 'Free express shipping, 5-year warranty' },
-]
+const formatDate = (value: string) =>
+  new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+
+/** Turns MOBILE_MONEY / CARD / … into something readable. */
+const formatEnum = (value: string) =>
+  value
+    .toLowerCase()
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
 
 const digits = (v: string) => v.replace(/\D/g, '')
 
-function luhnValid(value: string) {
-  const nums = digits(value)
-  if (nums.length < 13 || nums.length > 19) return false
-  let sum = 0
-  let double = false
-  for (let i = nums.length - 1; i >= 0; i -= 1) {
-    let d = Number(nums[i])
-    if (double) {
-      d *= 2
-      if (d > 9) d -= 9
-    }
-    sum += d
-    double = !double
-  }
-  return sum % 10 === 0
-}
-
 export function AccountPage() {
+  const { products } = useCatalog()
   const [params, setParams] = useSearchParams()
   const tabParam = params.get('tab') as Tab | null
   const [tab, setTab] = useState<Tab>(
@@ -71,7 +60,6 @@ export function AccountPage() {
     profile,
     signedIn,
     addresses,
-    payments,
     orders,
     totalSpent,
     signIn,
@@ -80,10 +68,6 @@ export function AccountPage() {
     addAddress,
     removeAddress,
     makeDefaultAddress,
-    addPayment,
-    removePayment,
-    makeDefaultPayment,
-    redeemPoints,
   } = useAccount()
 
   const { savedProducts, moveToCart, removeSaved, wishlist } = useCart()
@@ -103,9 +87,6 @@ export function AccountPage() {
     zip: '',
   })
   const [addressErrors, setAddressErrors] = useState<Record<string, string>>({})
-  const [cardForm, setCardForm] = useState({ number: '', expiry: '', name: '' })
-  const [cardErrors, setCardErrors] = useState<Record<string, string>>({})
-  const [redeeming, setRedeeming] = useState(false)
 
   // Keep ?tab= in step with the sidebar so links like /account?tab=saved work.
   useEffect(() => {
@@ -120,17 +101,8 @@ export function AccountPage() {
 
   const wishlistItems = useMemo(
     () => products.filter((p) => wishlist.includes(p.id)),
-    [wishlist],
+    [products, wishlist],
   )
-
-  const tier = useMemo(
-    () => [...TIERS].reverse().find((t) => profile.points >= t.at) ?? TIERS[0],
-    [profile.points],
-  )
-  const nextTier = TIERS[TIERS.indexOf(tier) + 1]
-  const tierProgress = nextTier
-    ? (profile.points - tier.at) / (nextTier.at - tier.at)
-    : 1
 
   const submitAuth = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -186,52 +158,6 @@ export function AccountPage() {
     setNewAddress({ label: '', name: '', street: '', city: '', state: '', zip: '' })
     setAddressErrors({})
     push({ tone: 'success', title: 'Address saved' })
-  }
-
-  const submitCard = (e: React.FormEvent) => {
-    e.preventDefault()
-    const errors: Record<string, string> = {}
-    if (!luhnValid(cardForm.number)) errors.number = 'That card number is not valid'
-    const [mm, yy] = cardForm.expiry.split('/').map((p) => digits(p))
-    if (!mm || Number(mm) < 1 || Number(mm) > 12) errors.expiry = 'MM / YY'
-    if (yy) {
-      const expiry = new Date(2000 + Number(yy), Number(mm), 1)
-      if (expiry <= new Date()) errors.expiry = 'That card has expired'
-    }
-    if (!cardForm.name.trim()) errors.name = 'Required'
-    setCardErrors(errors)
-    if (Object.keys(errors).length > 0) return
-
-    const nums = digits(cardForm.number)
-    const brand = nums.startsWith('4')
-      ? 'Visa'
-      : /^5[1-5]/.test(nums)
-        ? 'Mastercard'
-        : nums.startsWith('3')
-          ? 'Amex'
-          : 'Card'
-
-    addPayment({
-      brand,
-      last4: nums.slice(-4),
-      expiry: `${mm} / ${yy}`,
-    })
-    setCardForm({ number: '', expiry: '', name: '' })
-    setCardErrors({})
-    push({ tone: 'success', title: 'Card saved', description: 'Only the last four digits are kept' })
-  }
-
-  const redeem = () => {
-    setRedeeming(true)
-    window.setTimeout(() => {
-      const value = redeemPoints()
-      setRedeeming(false)
-      push({
-        tone: value > 0 ? 'success' : 'error',
-        title: value > 0 ? `$${value.toFixed(2)} redeemed` : 'No credit to redeem',
-        description: value > 0 ? 'Added to your next order' : undefined,
-      })
-    }, 700)
   }
 
   /* ---------------------------------------------------------------------- */
@@ -367,16 +293,13 @@ export function AccountPage() {
             <aside className="lg:sticky lg:top-32 lg:self-start">
               <div className="panel p-5">
                 <p className="font-display text-lg font-extrabold text-ink">
-                  {profile.firstName} {profile.lastName}
+                  {profile?.firstName} {profile?.lastName}
                 </p>
-                <p className="mt-0.5 truncate text-xs text-ink-subtle">{profile.email}</p>
-                <span className="badge mt-3 border border-brand-400/30 bg-brand-500/12 text-brand-oncanvas">
-                  {profile.tier}
-                </span>
-                {profile.local && (
-                  <p className="mt-3 text-[11px] leading-relaxed text-ink-subtle">
-                    Running in local demo mode — this profile lives in your browser only.
-                  </p>
+                <p className="mt-0.5 truncate text-xs text-ink-subtle">{profile?.email}</p>
+                {profile?.role === 'ADMIN' && (
+                  <span className="badge mt-3 border border-brand-400/30 bg-brand-500/12 text-brand-oncanvas">
+                    Administrator
+                  </span>
                 )}
               </div>
 
@@ -388,9 +311,7 @@ export function AccountPage() {
                       ? orders.length
                       : t.id === 'addresses'
                         ? addresses.length
-                        : t.id === 'payments'
-                          ? payments.length
-                          : t.id === 'saved'
+                        : t.id === 'saved'
                             ? savedItems.length + wishlistItems.length
                             : undefined
                   return (
@@ -444,7 +365,11 @@ export function AccountPage() {
                         {[
                           { label: 'Orders placed', value: orders.length, icon: <Icon.Package className="size-4" /> },
                           { label: 'Total spent', value: totalSpent, prefix: `${SYMBOL}\u2009`, icon: <Icon.Award className="size-4" /> },
-                          { label: 'Reward points', value: profile.points, icon: <Icon.Sparkle className="size-4" /> },
+                          {
+                            label: 'Items bought',
+                            value: orders.reduce((n, o) => n + o.items.reduce((m, i) => m + i.quantity, 0), 0),
+                            icon: <Icon.Sparkle className="size-4" />,
+                          },
                         ].map((stat) => (
                           <div key={stat.label} className="panel p-4">
                             <span className="flex size-9 items-center justify-center rounded-xl border border-line bg-surface-inset text-brand-oncanvas">
@@ -466,24 +391,20 @@ export function AccountPage() {
                       <div className="panel p-5">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
-                            <h2 className="text-sm font-bold text-ink">
-                              {profile.firstName}&rsquo;s {tier.name} tier
-                            </h2>
+                            <h2 className="text-sm font-bold text-ink">Your account</h2>
                             <p className="mt-0.5 text-xs text-ink-muted">
-                              {nextTier
-                                ? `${(nextTier.at - profile.points).toLocaleString()} points to ${nextTier.name}`
-                                : 'Top tier reached — enjoy the perks'}
+                              Member since {profile?.memberSince}
                             </p>
                           </div>
-                          <button onClick={() => setTab('rewards')} className="btn-ghost btn-sm">
-                            <Icon.Award className="size-3.5" />
-                            Rewards
+                          <button onClick={() => setTab('addresses')} className="btn-ghost btn-sm">
+                            <Icon.Pin className="size-3.5" />
+                            Addresses
                           </button>
                         </div>
-                        <ProgressMeter value={tierProgress} className="mt-4" />
-                        <p className="mt-2 text-xs text-ink-subtle">
-                          {tier.perk}
-                          {nextTier ? ` · next: ${nextTier.perk}` : ''}
+                        <p className="mt-3 text-xs text-ink-subtle">
+                          Orders are loaded from the server each time you open this page. Saved
+                          addresses are kept in this browser only, under your own account, so they
+                          stay private to you and are not sent to the server.
                         </p>
                       </div>
 
@@ -651,175 +572,6 @@ export function AccountPage() {
                     </div>
                   )}
 
-                  {tab === 'payments' && (
-                    <div>
-                      <h2 className="text-lg font-bold text-ink">Payment methods</h2>
-                      <p className="mt-1 text-sm text-ink-muted">
-                        Only the brand and last four digits are kept — never the full number.
-                      </p>
-
-                      <Stagger className="mt-5 grid gap-3 sm:grid-cols-2" stagger={0.06}>
-                        {payments.map((method) => (
-                          <StaggerItem key={method.id}>
-                            <div className="panel flex items-center gap-3 p-4">
-                              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-line bg-surface-inset text-brand-oncanvas">
-                                <Icon.Card className="size-4" />
-                              </span>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm font-semibold text-ink">
-                                  {method.brand} ···· {method.last4}
-                                </p>
-                                <p className="text-xs text-ink-subtle">Expires {method.expiry}</p>
-                              </div>
-                              {method.isDefault ? (
-                                <span className="badge shrink-0 bg-emerald-500/15 text-emerald-300">
-                                  Default
-                                </span>
-                              ) : (
-                                <button
-                                  onClick={() => makeDefaultPayment(method.id)}
-                                  className="btn-quiet btn-sm shrink-0"
-                                >
-                                  Set default
-                                </button>
-                              )}
-                              <button
-                                onClick={() => {
-                                  removePayment(method.id)
-                                  push({ title: 'Card removed' })
-                                }}
-                                aria-label={`Remove card ending ${method.last4}`}
-                                className="btn-quiet btn-sm shrink-0 hover:text-rose-300"
-                              >
-                                <Icon.Trash className="size-3.5" />
-                              </button>
-                            </div>
-                          </StaggerItem>
-                        ))}
-                      </Stagger>
-
-                      <form onSubmit={submitCard} className="panel mt-5 p-5" noValidate>
-                        <h3 className="text-sm font-bold text-ink">Add a card</h3>
-                        <div className="mt-4">
-                          <TextField
-                            id="c-number"
-                            label="Card number"
-                            value={cardForm.number}
-                            onChange={(v) =>
-                              setCardForm({
-                                ...cardForm,
-                                number: digits(v).slice(0, 19).replace(/(.{4})/g, '$1 ').trim(),
-                              })
-                            }
-                            error={cardErrors.number}
-                            placeholder="4242 4242 4242 4242"
-                            inputMode="numeric"
-                          />
-                        </div>
-                        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                          <TextField
-                            id="c-expiry"
-                            label="Expiry"
-                            value={cardForm.expiry}
-                            onChange={(v) => {
-                              const nums = digits(v).slice(0, 4)
-                              setCardForm({
-                                ...cardForm,
-                                expiry: nums.length <= 2 ? nums : `${nums.slice(0, 2)} / ${nums.slice(2)}`,
-                              })
-                            }}
-                            error={cardErrors.expiry}
-                            placeholder="MM / YY"
-                            inputMode="numeric"
-                          />
-                          <TextField
-                            id="c-name"
-                            label="Name on card"
-                            value={cardForm.name}
-                            onChange={(v) => setCardForm({ ...cardForm, name: v })}
-                            error={cardErrors.name}
-                          />
-                        </div>
-                        <button type="submit" className="btn-primary btn-sm mt-5 px-5">
-                          <Icon.Card className="size-3.5" />
-                          Save card
-                        </button>
-                      </form>
-                    </div>
-                  )}
-
-                  {tab === 'rewards' && (
-                    <div>
-                      <h2 className="text-lg font-bold text-ink">Rewards</h2>
-                      <p className="mt-1 text-sm text-ink-muted">
-                        One point per TSh 1,000 spent. 100 points is TSh 1,000 of store credit.
-                      </p>
-
-                      <div className="panel ring-gradient mt-5 p-6">
-                        <div className="flex flex-wrap items-end justify-between gap-4">
-                          <div>
-                            <p className="text-[11px] tracking-[0.16em] text-ink-subtle uppercase">
-                              Available balance
-                            </p>
-                            <p className="font-display mt-1 text-4xl font-extrabold text-ink">
-                              <Counter to={profile.points} />
-                              <span className="ml-2 text-base font-semibold text-ink-subtle">
-                                points
-                              </span>
-                            </p>
-                            <p className="mt-1 text-sm text-ink-muted">
-                              Worth {money(profile.points)} · store credit{' '}
-                              {moneyExact(profile.storeCredit)}
-                            </p>
-                          </div>
-                          <button
-                            onClick={redeem}
-                            disabled={redeeming || profile.storeCredit <= 0}
-                            className="btn-primary"
-                          >
-                            {redeeming ? (
-                              <>
-                                <span className="size-4 animate-spin rounded-full border-2 border-line-strong border-t-white" />
-                                Redeeming…
-                              </>
-                            ) : (
-                              <>
-                                <Icon.Sparkle className="size-4" />
-                                Redeem store credit
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      </div>
-
-                      <Stagger className="mt-5 grid gap-3 sm:grid-cols-3" stagger={0.07}>
-                        {TIERS.map((t) => {
-                          const reached = profile.points >= t.at
-                          return (
-                            <StaggerItem key={t.name}>
-                              <div
-                                className={`panel h-full p-5 ${
-                                  t.name === tier.name ? 'ring-gradient' : ''
-                                }`}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <p className="text-sm font-bold text-ink">{t.name}</p>
-                                  {reached && (
-                                    <Icon.Check className="size-4 text-emerald-400" />
-                                  )}
-                                </div>
-                                <p className="mt-1 text-xs text-ink-subtle">
-                                  {t.at.toLocaleString()} points
-                                </p>
-                                <p className="mt-3 text-sm text-ink-muted">{t.perk}</p>
-                              </div>
-                            </StaggerItem>
-                          )
-                        })}
-                      </Stagger>
-                    </div>
-                  )}
-
                   {tab === 'saved' && (
                     <div>
                       <h2 className="text-lg font-bold text-ink">Saved items</h2>
@@ -917,7 +669,7 @@ function OrderRow({ order }: { order: Order }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className={`badge ${meta.tone}`}>{meta.label}</span>
-          <span className="font-mono text-xs text-ink-muted">{order.code}</span>
+          <span className="font-mono text-xs text-ink-muted">{order.orderNumber}</span>
         </div>
         <p className="mt-1.5 line-clamp-1 text-sm text-ink-muted">
           {order.items.map((i) => i.name).join(', ')}
@@ -925,7 +677,7 @@ function OrderRow({ order }: { order: Order }) {
       </div>
       <div className="shrink-0 text-right">
         <p className="text-sm font-bold text-ink">${order.total.toFixed(2)}</p>
-        <p className="text-xs text-ink-subtle">{order.placedOn}</p>
+        <p className="text-xs text-ink-subtle">{formatDate(order.createdAt)}</p>
       </div>
     </div>
   )
@@ -937,7 +689,7 @@ function OrderDetail({ order }: { order: Order }) {
     <div className="panel overflow-hidden">
       <div className="flex flex-wrap items-center gap-3 border-b border-line-faint p-4">
         <span className={`badge ${meta.tone}`}>{meta.label}</span>
-        <span className="font-mono text-xs text-ink-muted">{order.code}</span>
+        <span className="font-mono text-xs text-ink-muted">{order.orderNumber}</span>
         <span className="ml-auto text-sm font-bold text-ink">${order.total.toFixed(2)}</span>
       </div>
 
@@ -994,7 +746,7 @@ function OrderDetail({ order }: { order: Order }) {
                 {item.name} <span className="text-ink-subtle">× {item.quantity}</span>
               </span>
               <span className="shrink-0 font-semibold text-ink tabular-nums">
-                ${(item.price * item.quantity).toFixed(2)}
+                ${item.subtotal.toFixed(2)}
               </span>
             </li>
           ))}
@@ -1004,31 +756,28 @@ function OrderDetail({ order }: { order: Order }) {
           <div>
             <p className="text-ink-subtle">Delivering to</p>
             <p className="mt-0.5 text-body">
-              {order.address.name}, {order.address.street}
+              {order.shippingAddress.fullName}, {order.shippingAddress.street}
             </p>
             <p className="text-ink-muted">
-              {order.address.city}, {order.address.state} {order.address.zip}
+              {order.shippingAddress.city}, {order.shippingAddress.region}{' '}
+              {order.shippingAddress.postalCode ?? ''}
             </p>
           </div>
           <div>
             <p className="text-ink-subtle">Payment</p>
-            <p className="mt-0.5 text-body">Card ending {order.cardLast4}</p>
+            <p className="mt-0.5 text-body">
+              {order.payment ? formatEnum(order.payment.method) : 'Not recorded'}
+            </p>
             <p className="text-ink-muted">
-              {order.speed === 'express' ? 'Express delivery' : 'Standard delivery'}
+              {order.payment ? formatEnum(order.payment.status) : 'No payment on file'}
             </p>
           </div>
           <div>
             <p className="text-ink-subtle">Contact</p>
-            <p className="mt-0.5 truncate text-body">{order.email}</p>
-            <p className="text-ink-muted">Placed {order.placedOn}</p>
+            <p className="mt-0.5 truncate text-body">{order.shippingAddress.phone}</p>
+            <p className="text-ink-muted">Placed {formatDate(order.createdAt)}</p>
           </div>
         </div>
-
-        {order.notes && (
-          <p className="mt-3 rounded-lg border border-line-faint bg-surface-inset p-3 text-xs text-ink-muted">
-            <span className="font-semibold text-body">Note:</span> {order.notes}
-          </p>
-        )}
       </div>
     </div>
   )

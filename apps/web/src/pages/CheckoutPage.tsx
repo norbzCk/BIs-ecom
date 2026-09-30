@@ -8,6 +8,7 @@ import { TrustBar } from '../components/TrustBar'
 import { EmptyState, ProgressMeter } from '../components/ui'
 import { FLAT_SHIPPING, SHIPPING_THRESHOLD, TAX_RATE, useCart } from '../lib/cart-context'
 import { useAccount, type Address } from '../lib/account-context'
+import { apiRequest, ApiError } from '../lib/api-client'
 import { Magnetic } from '../lib/motion/interactive'
 import { Stagger, StaggerItem } from '../lib/motion/reveal'
 import { useToast } from '../lib/motion/toast'
@@ -21,8 +22,6 @@ const STEPS: { id: StepId; label: string; icon: 'Mail' | 'Truck' | 'Card' | 'Che
   { id: 'payment', label: 'Payment', icon: 'Card' },
   { id: 'review', label: 'Review', icon: 'Check' },
 ]
-
-const EXPRESS = 24.95
 
 /** The address being typed, before it becomes a saved Address record. */
 type DraftAddress = Omit<Address, 'id' | 'isDefault'>
@@ -39,62 +38,65 @@ const EMPTY_ADDRESS: DraftAddress = {
 /** Groups of 4, ignoring spaces and dashes. */
 const digits = (value: string) => value.replace(/\D/g, '')
 
-function luhnValid(value: string) {
-  const nums = digits(value)
-  if (nums.length < 13 || nums.length > 19) return false
-  let sum = 0
-  let double = false
-  for (let i = nums.length - 1; i >= 0; i -= 1) {
-    let d = Number(nums[i])
-    if (double) {
-      d *= 2
-      if (d > 9) d -= 9
-    }
-    sum += d
-    double = !double
-  }
-  return sum % 10 === 0
-}
+/**
+ * Mirrors the `PaymentMethod` enum in prisma/schema.prisma. Nothing is charged
+ * here: the order is created with a PENDING payment and the method decides who
+ * collects the money, so we record the choice and never ask for card details
+ * we have no way to take.
+ */
+type PaymentMethod = 'MOBILE_MONEY' | 'CARD' | 'BANK_TRANSFER' | 'CASH_ON_DELIVERY'
 
-function formatCard(value: string) {
-  const nums = digits(value).slice(0, 19)
-  return nums.replace(/(.{4})/g, '$1 ').trim()
-}
-
-function formatExpiry(value: string) {
-  const nums = digits(value).slice(0, 4)
-  if (nums.length <= 2) return nums
-  return `${nums.slice(0, 2)} / ${nums.slice(2)}`
-}
+const PAYMENT_METHODS: { id: PaymentMethod; title: string; detail: string }[] = [
+  {
+    id: 'MOBILE_MONEY',
+    title: 'Mobile money',
+    detail: 'We send a payment request to the number on this order.',
+  },
+  {
+    id: 'CARD',
+    title: 'Card',
+    detail: 'Pay by card when the parcel is handed over.',
+  },
+  {
+    id: 'BANK_TRANSFER',
+    title: 'Bank transfer',
+    detail: 'We email you the account details to transfer to.',
+  },
+  {
+    id: 'CASH_ON_DELIVERY',
+    title: 'Cash on delivery',
+    detail: 'Keep the exact amount ready for the rider.',
+  },
+]
 
 export function CheckoutPage() {
-  const { cartProducts, subtotal, discount, tax, promo, itemCount, clearCart } = useCart()
-  const { profile, signedIn, addresses, payments, placeOrder } = useAccount()
+  const { cartProducts, subtotal, tax, itemCount, clearCart } = useCart()
+  const { profile, signedIn, token, addresses } = useAccount()
   const { push } = useToast()
   const navigate = useNavigate()
 
   const [step, setStep] = useState<StepId>('contact')
-  const [email, setEmail] = useState(profile.email)
-  const [phone, setPhone] = useState(profile.phone)
+  const [email, setEmail] = useState(profile?.email ?? '')
+  const [phone, setPhone] = useState(profile?.phone ?? '')
   const [address, setAddress] = useState(EMPTY_ADDRESS)
-  const [speed, setSpeed] = useState<'express' | 'standard'>('express')
-  const [method, setMethod] = useState<'saved' | 'new'>(payments[0] ? 'saved' : 'new')
-  const [card, setCard] = useState({ number: '', expiry: '', cvc: '', name: '' })
+  const [method, setMethod] = useState<PaymentMethod>('MOBILE_MONEY')
   const [notes, setNotes] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [placing, setPlacing] = useState(false)
   const [orderCode, setOrderCode] = useState<string | null>(null)
+  const [placedTotal, setPlacedTotal] = useState(0)
 
   const savedAddress = addresses.find((a) => a.isDefault) ?? addresses[0]
-  const savedCard = payments.find((p) => p.isDefault) ?? payments[0]
+  const methodLabel = PAYMENT_METHODS.find((m) => m.id === method)?.title ?? 'Mobile money'
 
-  const shipping = useMemo(() => {
-    if (promo?.waivesShipping) return 0
-    if (speed === 'express') return subtotal >= 150 ? EXPRESS : 14.99 + EXPRESS
-    return subtotal >= 150 ? 0 : 14.99
-  }, [promo, speed, subtotal])
+  // Mirrors FREE_SHIPPING_THRESHOLD / STANDARD_SHIPPING_FEE in
+  // src/orders/orders.service.ts so the estimate matches what the server records.
+  const shipping = useMemo(
+    () => (subtotal > SHIPPING_THRESHOLD ? 0 : FLAT_SHIPPING),
+    [subtotal],
+  )
 
-  const total = Math.max(0, subtotal - discount) + shipping + tax
+  const total = subtotal + shipping + tax
 
   const stepIndex = STEPS.findIndex((s) => s.id === step)
 
@@ -112,19 +114,6 @@ export function CheckoutPage() {
       if (!address.city.trim()) next.city = 'Required'
       if (address.state.trim().length < 2) next.state = 'Required'
       if (digits(address.zip).length < 4) next.zip = 'Enter a valid postcode'
-    }
-
-    if (target === 'payment' && method === 'new') {
-      if (!luhnValid(card.number)) next.card = 'That card number is not valid'
-      const [mm, yy] = card.expiry.split('/').map((p) => digits(p))
-      if (!mm || Number(mm) < 1 || Number(mm) > 12) next.expiry = 'MM / YY'
-      else if (yy) {
-        const now = new Date()
-        const expiry = new Date(2000 + Number(yy), Number(mm), 1)
-        if (expiry <= now) next.expiry = 'That card has expired'
-      }
-      if (digits(card.cvc).length < 3) next.cvc = '3 or 4 digits'
-      if (!card.name.trim()) next.cardName = 'Name as printed on the card'
     }
 
     setErrors(next)
@@ -156,49 +145,51 @@ export function CheckoutPage() {
     if (target) setStep(target.id)
   }
 
-  const place = () => {
+  const place = async () => {
     if (!validate('payment')) {
       setStep('payment')
       return
     }
     if (cartProducts.length === 0) return
+    if (!token) {
+      push({ tone: 'error', title: 'Sign in to place an order' })
+      navigate('/account?next=/checkout')
+      return
+    }
 
     setPlacing(true)
-    const cardLast4 = method === 'saved' && savedCard ? savedCard.last4 : digits(card.number).slice(-4)
-
-    // A short delay so the confirmation animation reads as a real transaction.
-    window.setTimeout(() => {
-      const order = placeOrder({
-        email,
-        address: {
-          label: address.label || 'Shipping',
-          name: address.name,
+    try {
+      // The server owns the cart, the totals and the order record; it returns
+      // the order number and the figures it recorded.
+      const order = await apiRequest<{ orderNumber: string; total: number }>('/orders', {
+        method: 'POST',
+        token,
+        body: {
+          fullName: address.name,
+          phone,
           street: address.street,
           city: address.city,
-          state: address.state,
-          zip: address.zip,
+          region: address.state,
+          country: 'Tanzania',
+          postalCode: address.zip,
+          paymentMethod: method,
+          notes: notes.trim() || undefined,
         },
-        cardLast4,
-        speed,
-        notes: notes.trim() || undefined,
-        items: cartProducts.map(({ product, quantity }) => ({
-          productId: product.id,
-          name: product.name,
-          quantity,
-          price: product.price,
-        })),
-        subtotal,
-        discount,
-        shipping,
-        tax,
-        total,
       })
 
-      clearCart()
+      await clearCart()
       setPlacing(false)
-      setOrderCode(order.code)
-      push({ tone: 'success', title: `Order ${order.code} placed` })
-    }, 900)
+      setOrderCode(order.orderNumber)
+      setPlacedTotal(order.total)
+      push({ tone: 'success', title: `Order ${order.orderNumber} placed` })
+    } catch (err) {
+      setPlacing(false)
+      push({
+        tone: 'error',
+        title: 'Could not place the order',
+        description: err instanceof ApiError ? err.message : 'Please try again',
+      })
+    }
   }
 
   /* ---------------------------------------------------------------------- */
@@ -257,7 +248,9 @@ export function CheckoutPage() {
           </motion.div>
 
           <p className="mt-10 text-xs text-ink-faint">
-            This is a demonstration store, so no payment was taken and nothing will ship.
+            Order total {moneyExact(placedTotal)}. No money has moved yet — the order is recorded
+            as {methodLabel.toLowerCase()} and stays pending until payment is confirmed. We will
+            email you as soon as the parcel leaves us.
           </p>
         </div>
       </SiteLayout>
@@ -275,7 +268,7 @@ export function CheckoutPage() {
           <EmptyState
             icon={<Icon.Cart className="size-6" />}
             title="There is nothing to check out"
-            body="Add something to your cart first. Guest checkout works without an account."
+            body="Add something to your cart first. You can browse as a guest, but an account is needed to place the order."
             action={{ label: 'Browse the catalog', to: '/shop' }}
           />
         </div>
@@ -293,8 +286,8 @@ export function CheckoutPage() {
         <h1 className="text-2xl font-extrabold sm:text-3xl">Checkout</h1>
         <p className="mt-2 text-sm text-ink-muted">
           {signedIn
-            ? `Signed in as ${profile.email}`
-            : 'Checking out as a guest — no account needed.'}
+            ? `Signed in as ${profile?.email}`
+            : 'Sign in to place this order — the cart stays exactly as it is.'}
         </p>
 
         {/* Stepper ------------------------------------------------------- */}
@@ -383,11 +376,11 @@ export function CheckoutPage() {
                       <div className="flex items-start gap-3 rounded-xl border border-line bg-surface-inset p-4">
                         <Icon.User className="mt-0.5 size-4 shrink-0 text-brand-oncanvas" />
                         <p className="text-xs leading-relaxed text-ink-muted">
-                          Checking out as a guest. To keep your orders and addresses on file,{' '}
-                          <Link to="/account" className="font-semibold text-brand-oncanvas hover:text-brand-oncanvas">
-                            sign in or create an account
+                          You need an account before the order can be placed.{' '}
+                          <Link to="/account?next=/checkout" className="font-semibold text-brand-oncanvas hover:text-brand-oncanvas">
+                            Sign in or create an account
                           </Link>{' '}
-                          first — your cart will carry over.
+                          — you can fill this in first, and your cart will carry over.
                         </p>
                       </div>
                     )}
@@ -488,45 +481,17 @@ export function CheckoutPage() {
                       />
                     </div>
 
-                    <div>
-                      <span className="label">Delivery speed</span>
-                      <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                        {(
-                          [
-                            {
-                              id: 'express' as const,
-                              title: 'Express',
-                              detail: 'Next business day, insured',
-                              price: subtotal >= 150 ? `$${EXPRESS.toFixed(2)}` : `$${(14.99 + EXPRESS).toFixed(2)}`,
-                            },
-                            {
-                              id: 'standard' as const,
-                              title: 'Standard',
-                              detail: '2–4 business days',
-                              price: subtotal >= SHIPPING_THRESHOLD ? 'Free' : money(FLAT_SHIPPING),
-                            },
-                          ]
-                        ).map((option) => (
-                          <button
-                            key={option.id}
-                            onClick={() => setSpeed(option.id)}
-                            aria-pressed={speed === option.id}
-                            className={`rounded-xl border p-4 text-left transition ${
-                              speed === option.id
-                                ? 'border-brand-400/60 bg-brand-500/12'
-                                : 'border-line bg-surface-inset hover:border-line-strong'
-                            }`}
-                          >
-                            <span className="flex items-center justify-between gap-2">
-                              <span className="text-sm font-bold text-ink">{option.title}</span>
-                              <span className="text-sm font-semibold text-brand-oncanvas">
-                                {option.price}
-                              </span>
-                            </span>
-                            <span className="mt-1 block text-xs text-ink-muted">{option.detail}</span>
-                          </button>
-                        ))}
+                    <div className="rounded-xl border border-line bg-surface-inset p-4">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="text-sm font-bold text-ink">Standard delivery</span>
+                        <span className="text-sm font-semibold text-brand-oncanvas">
+                          {shipping > SHIPPING_THRESHOLD ? 'Free' : money(shipping)}
+                        </span>
                       </div>
+                      <p className="mt-1 text-xs text-ink-muted">
+                        Delivered in 2–4 business days. Shipping is free on orders over{' '}
+                        {money(SHIPPING_THRESHOLD)}.
+                      </p>
                     </div>
                   </div>
                 )}
@@ -536,103 +501,36 @@ export function CheckoutPage() {
                     <div>
                       <h2 className="text-lg font-bold text-ink">Payment</h2>
                       <p className="mt-1 text-sm text-ink-muted">
-                        A demonstration store — nothing is charged and no card data is stored.
+                        Choose how you would like to pay. We record the choice on the order and
+                        sort out the money with you before it ships.
                       </p>
                     </div>
 
-                    {savedCard && (
-                      <button
-                        onClick={() => setMethod('saved')}
-                        aria-pressed={method === 'saved'}
-                        className={`flex w-full items-center gap-3 rounded-xl border p-4 text-left transition ${
-                          method === 'saved'
-                            ? 'border-brand-400/60 bg-brand-500/12'
-                            : 'border-line bg-surface-inset hover:border-line-strong'
-                        }`}
-                      >
-                        <Icon.Card className="size-5 shrink-0 text-brand-oncanvas" />
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-semibold text-ink">
-                            {savedCard.brand} ending {savedCard.last4}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {PAYMENT_METHODS.map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => setMethod(option.id)}
+                          aria-pressed={method === option.id}
+                          className={`rounded-xl border p-4 text-left transition ${
+                            method === option.id
+                              ? 'border-brand-400/60 bg-brand-500/12'
+                              : 'border-line bg-surface-inset hover:border-line-strong'
+                          }`}
+                        >
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-bold text-ink">{option.title}</span>
+                            {method === option.id && (
+                              <span className="badge shrink-0 bg-brand-500/15 text-brand-oncanvas">
+                                Selected
+                              </span>
+                            )}
                           </span>
-                          <span className="block text-xs text-ink-muted">
-                            Expires {savedCard.expiry}
-                          </span>
-                        </span>
-                        {savedCard.isDefault && (
-                          <span className="badge shrink-0 bg-emerald-500/15 text-emerald-300">
-                            Default
-                          </span>
-                        )}
-                      </button>
-                    )}
-
-                    <button
-                      onClick={() => setMethod('new')}
-                      aria-pressed={method === 'new'}
-                      className={`flex w-full items-center gap-3 rounded-xl border p-4 text-left transition ${
-                        method === 'new'
-                          ? 'border-brand-400/60 bg-brand-500/12'
-                          : 'border-line bg-surface-inset hover:border-line-strong'
-                      }`}
-                    >
-                      <Icon.Plus className="size-5 shrink-0 text-brand-oncanvas" />
-                      <span className="text-sm font-semibold text-ink">Use a different card</span>
-                    </button>
-
-                    {method === 'new' && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        className="space-y-4 overflow-hidden"
-                      >
-                        <Field
-                          id="card"
-                          label="Card number"
-                          value={card.number}
-                          onChange={(e) => setCard({ ...card, number: formatCard(e.target.value) })}
-                          error={errors.card}
-                          placeholder="4242 4242 4242 4242"
-                          inputMode="numeric"
-                          autoComplete="cc-number"
-                        />
-                        <div className="grid gap-4 sm:grid-cols-3">
-                          <Field
-                            id="expiry"
-                            label="Expiry"
-                            value={card.expiry}
-                            onChange={(e) => setCard({ ...card, expiry: formatExpiry(e.target.value) })}
-                            error={errors.expiry}
-                            placeholder="MM / YY"
-                            inputMode="numeric"
-                            autoComplete="cc-exp"
-                          />
-                          <Field
-                            id="cvc"
-                            label="CVC"
-                            value={card.cvc}
-                            onChange={(e) =>
-                              setCard({ ...card, cvc: digits(e.target.value).slice(0, 4) })
-                            }
-                            error={errors.cvc}
-                            placeholder="123"
-                            inputMode="numeric"
-                            autoComplete="cc-csc"
-                          />
-                          <Field
-                            id="cardName"
-                            label="Name on card"
-                            value={card.name}
-                            onChange={(e) => setCard({ ...card, name: e.target.value })}
-                            error={errors.cardName}
-                            autoComplete="cc-name"
-                          />
-                        </div>
-                        <p className="text-[11px] text-ink-subtle">
-                          Any Luhn-valid test number works, e.g. 4242 4242 4242 4242.
-                        </p>
-                      </motion.div>
-                    )}
+                          <span className="mt-1 block text-xs text-ink-muted">{option.detail}</span>
+                        </button>
+                      ))}
+                    </div>
 
                     <div>
                       <label htmlFor="notes" className="label">
@@ -670,21 +568,13 @@ export function CheckoutPage() {
                         label="Shipping"
                         onEdit={() => setStep('shipping')}
                         value={`${address.name}, ${address.street}`}
-                        detail={`${address.city}, ${address.state} ${address.zip} · ${
-                          speed === 'express' ? 'Express' : 'Standard'
-                        }`}
+                        detail={`${address.city}, ${address.state} ${address.zip} · Standard delivery`}
                       />
                       <ReviewTile
                         label="Payment"
                         onEdit={() => setStep('payment')}
-                        value={
-                          method === 'saved' && savedCard
-                            ? `${savedCard.brand} ···· ${savedCard.last4}`
-                            : card.number
-                              ? `···· ${digits(card.number).slice(-4)}`
-                              : 'Not set'
-                        }
-                        detail={method === 'saved' ? 'Saved card' : card.name || 'New card'}
+                        value={methodLabel}
+                        detail={PAYMENT_METHODS.find((m) => m.id === method)?.detail ?? ''}
                       />
                     </div>
 
@@ -694,12 +584,7 @@ export function CheckoutPage() {
                         {cartProducts.map(({ product, quantity }) => (
                           <StaggerItem key={product.id}>
                             <div className="flex items-center gap-3 rounded-xl border border-line-faint bg-surface-inset p-2.5">
-                              <span
-                                className="relative size-12 shrink-0 overflow-hidden rounded-lg"
-                                style={{
-                                  background: `linear-gradient(140deg, hsl(${product.hue} 60% 20%), #070911)`,
-                                }}
-                              >
+                              <span className="size-12 shrink-0 overflow-hidden rounded-lg bg-ink">
                                 <ProductVisual product={product} className="size-full" />
                               </span>
                               <span className="min-w-0 flex-1">
@@ -797,13 +682,8 @@ export function CheckoutPage() {
                 <SummaryRow label={`Subtotal (${itemCount} ${itemCount === 1 ? 'item' : 'items'})`}>
                   ${subtotal.toFixed(2)}
                 </SummaryRow>
-                {promo && (
-                  <SummaryRow label={`Discount · ${promo.code}`} tone="emerald">
-                    &minus;${discount.toFixed(2)}
-                  </SummaryRow>
-                )}
                 <SummaryRow label="Shipping" tone={shipping === 0 ? 'emerald' : undefined}>
-                  {shipping === 0 ? 'FREE' : `$${shipping.toFixed(2)}`}
+                  {shipping === 0 ? 'FREE' : moneyExact(shipping)}
                 </SummaryRow>
                 <SummaryRow label={`Sales tax (${(TAX_RATE * 100).toFixed(0)}%)`}>
                   ${tax.toFixed(2)}

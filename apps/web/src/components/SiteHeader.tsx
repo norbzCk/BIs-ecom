@@ -2,8 +2,10 @@ import { AnimatePresence, motion, useMotionValueEvent, useScroll, useSpring } fr
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useCart } from '../lib/cart-context'
+import { useCatalog } from '../lib/catalog'
 import { money, moneyExact } from '../lib/money'
 import { SHIPPING_THRESHOLD } from '../lib/cart-context'
+import { ProductThumb } from './ProductVisual'
 import { Drawer } from './ui'
 import { Icon } from './icons'
 import { ThemeToggle } from './ThemeToggle'
@@ -16,17 +18,9 @@ const NAV = [
   { label: 'Support', to: '/support' },
 ]
 
-const SUGGESTIONS = [
-  'Apex-15 Pro',
-  'ultrawide monitor',
-  'mechanical keyboard',
-  'wireless mouse',
-  'USB-C dock',
-  'reference headphones',
-]
-
 export function SiteHeader() {
   const { itemCount, cartProducts, subtotal } = useCart()
+  const { categories, brands } = useCatalog()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -77,6 +71,10 @@ export function SiteHeader() {
     navigate(`/shop?q=${encodeURIComponent(term)}`)
   }
 
+  // Search terms come from the live catalog, so they never point at a product
+  // that has been discontinued or renamed.
+  const suggestions = [...categories.map((c) => c.name), ...brands].slice(0, 6)
+
   return (
     <>
       <motion.header
@@ -103,7 +101,7 @@ export function SiteHeader() {
             >
               <div className="mx-auto flex max-w-7xl items-center justify-center gap-2 px-4 py-1.5 text-[11px] font-medium text-body">
                 <Icon.Bolt className="size-3 text-amber-400" />
-                Free insured express shipping on every order over {money(SHIPPING_THRESHOLD)}
+                Free insured delivery on every order over {money(SHIPPING_THRESHOLD)}
               </div>
             </motion.div>
           )}
@@ -170,7 +168,7 @@ export function SiteHeader() {
                     <p className="px-3 py-1.5 text-[10px] font-semibold tracking-[0.16em] text-ink-subtle uppercase">
                       Popular searches
                     </p>
-                    {SUGGESTIONS.map((term) => (
+                    {suggestions.map((term) => (
                       <button
                         key={term}
                         onClick={() => goToSuggestion(term)}
@@ -414,17 +412,9 @@ export function SiteHeader() {
                   <Link
                     to={`/product/${product.slug}`}
                     onClick={() => setCartOpen(false)}
-                    className="relative size-14 shrink-0 overflow-hidden rounded-lg"
-                    style={{
-                      background: `linear-gradient(135deg, hsl(${product.hue} 70% 24%), #0a0d18)`,
-                    }}
+                    className="size-14 shrink-0 overflow-hidden rounded-lg bg-ink"
                   >
-                    <span
-                      className="absolute inset-0"
-                      style={{
-                        background: `radial-gradient(60% 60% at 30% 25%, hsl(${product.hue} 90% 60% / 0.55), transparent 70%)`,
-                      }}
-                    />
+                    <ProductThumb product={product} />
                   </Link>
                   <div className="min-w-0 flex-1">
                     <Link

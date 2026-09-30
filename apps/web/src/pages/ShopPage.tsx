@@ -7,7 +7,7 @@ import { SiteLayout } from '../components/SiteLayout'
 import { Icon } from '../components/icons'
 import { Breadcrumbs, EmptyState, Section } from '../components/ui'
 import { SectionHeading } from '../lib/motion/marquee'
-import { BRANDS, CATEGORIES, products } from '../data/products'
+import { useCatalog, discountPercent } from '../lib/catalog'
 import { money } from '../lib/money'
 
 type Sort = 'recommended' | 'price-asc' | 'price-desc' | 'rating' | 'newest' | 'discount'
@@ -37,7 +37,8 @@ export function ShopPage() {
   const [params, setParams] = useSearchParams()
 
   const [query, setQuery] = useState(() => params.get('q') ?? '')
-  const [categories, setCategories] = useState<string[]>(() => {
+  const { products, categories: catalogCategories, brands: catalogBrands } = useCatalog()
+  const [categoryFilter, setCategoryFilter] = useState<string[]>(() => {
     const c = params.get('category')
     return c ? [c] : []
   })
@@ -55,14 +56,14 @@ export function ShopPage() {
   useEffect(() => {
     const next = new URLSearchParams()
     if (query.trim()) next.set('q', query.trim())
-    if (categories.length === 1) next.set('category', categories[0])
-    if (categories.length > 1) next.set('category', categories.join(','))
+    if (categoryFilter.length === 1) next.set('category', categoryFilter[0])
+    if (categoryFilter.length > 1) next.set('category', categoryFilter.join(','))
     if (brands.length) next.set('brand', brands.join(','))
     setParams(next, { replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, categories, brands])
+  }, [query, categoryFilter, brands])
 
-  useEffect(() => setPage(1), [query, categories, brands, band, inStockOnly, topRatedOnly, sort])
+  useEffect(() => setPage(1), [query, categoryFilter, brands, band, inStockOnly, topRatedOnly, sort])
 
   const minPrice = draftMin === '' ? null : Number(draftMin)
   const maxPrice = draftMax === '' ? null : Number(draftMax)
@@ -73,10 +74,10 @@ export function ShopPage() {
     const q = query.trim().toLowerCase()
 
     let list = products.filter((p) => {
-      if (categories.length && !categories.includes(p.category)) return false
-      if (brands.length && !brands.includes(p.brand)) return false
+      if (categoryFilter.length && !categoryFilter.includes(p.category)) return false
+      if (brands.length && !brands.includes(p.brand ?? '')) return false
       if (inStockOnly && p.stock <= 0) return false
-      if (topRatedOnly && p.rating < 4.5) return false
+      if (topRatedOnly && (p.rating ?? 0) < 4.5) return false
 
       if (minPrice !== null && !Number.isNaN(minPrice) && p.price < minPrice) return false
       if (maxPrice !== null && !Number.isNaN(maxPrice) && p.price > maxPrice) return false
@@ -87,9 +88,7 @@ export function ShopPage() {
       }
 
       if (q) {
-        const haystack = [p.name, p.brand, p.category, p.description ?? '', ...p.highlights]
-          .join(' ')
-          .toLowerCase()
+        const haystack = [p.name, p.brand ?? '', p.category, p.badge ?? ''].join(' ').toLowerCase()
         if (!haystack.includes(q)) return false
       }
       return true
@@ -104,25 +103,24 @@ export function ShopPage() {
         sorted.sort((a, b) => b.price - a.price)
         break
       case 'rating':
-        sorted.sort((a, b) => b.rating - a.rating)
+        sorted.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
         break
       case 'newest':
-        sorted.sort((a, b) => b.releasedOn.localeCompare(a.releasedOn))
+        sorted.sort((a, b) => (b.releasedAt ?? '').localeCompare(a.releasedAt ?? ''))
         break
       case 'discount':
-        sorted.sort(
-          (a, b) =>
-            (b.compareAtPrice ? 1 - b.price / b.compareAtPrice : 0) -
-            (a.compareAtPrice ? 1 - a.price / a.compareAtPrice : 0),
-        )
+        sorted.sort((a, b) => (discountPercent(b) ?? 0) - (discountPercent(a) ?? 0))
         break
       default:
-        sorted.sort((a, b) => Number(!!b.featured) - Number(!!a.featured) || b.rating - a.rating)
+        sorted.sort(
+          (a, b) => Number(!!b.featured) - Number(!!a.featured) || (b.rating ?? 0) - (a.rating ?? 0),
+        )
     }
     return sorted
   }, [
     query,
-    categories,
+    products,
+    categoryFilter,
     brands,
     band,
     inStockOnly,
@@ -140,7 +138,7 @@ export function ShopPage() {
     set(list.includes(value) ? list.filter((v) => v !== value) : [...list, value])
 
   const activeFilters =
-    categories.length +
+    categoryFilter.length +
     brands.length +
     (band !== 'all' ? 1 : 0) +
     (inStockOnly ? 1 : 0) +
@@ -149,7 +147,7 @@ export function ShopPage() {
 
   const clearAll = () => {
     setQuery('')
-    setCategories([])
+    setCategoryFilter([])
     setBrands([])
     setBand('all')
     setInStockOnly(false)
@@ -160,19 +158,16 @@ export function ShopPage() {
 
   const filterPanel = (
     <div className="space-y-7">
-      <FilterGroup title="Category" count={categories.length || undefined}>
-        {CATEGORIES.map((c) => {
-          const count = products.filter((p) => p.category === c.name).length
-          return (
-            <CheckRow
-              key={c.name}
-              label={c.name}
-              count={count}
-              checked={categories.includes(c.name)}
-              onChange={() => toggleIn(categories, c.name, setCategories)}
-            />
-          )
-        })}
+      <FilterGroup title="Category" count={categoryFilter.length || undefined}>
+        {catalogCategories.map((c) => (
+          <CheckRow
+            key={c.name}
+            label={c.name}
+            count={c.productCount}
+            checked={categoryFilter.includes(c.name)}
+            onChange={() => toggleIn(categoryFilter, c.name, setCategoryFilter)}
+          />
+        ))}
       </FilterGroup>
 
       <FilterGroup title="Price">
@@ -211,7 +206,7 @@ export function ShopPage() {
       </FilterGroup>
 
       <FilterGroup title="Brand" count={brands.length || undefined}>
-        {BRANDS.map((b) => {
+        {catalogBrands.map((b) => {
           const count = products.filter((p) => p.brand === b).length
           if (count === 0) return null
           return (
@@ -287,8 +282,8 @@ export function ShopPage() {
 
           {/* Active filter chips */}
           <div className="mt-5 flex flex-wrap items-center gap-2">
-            {categories.map((c) => (
-              <Chip key={c} onRemove={() => toggleIn(categories, c, setCategories)}>
+            {categoryFilter.map((c) => (
+              <Chip key={c} onRemove={() => toggleIn(categoryFilter, c, setCategoryFilter)}>
                 {c}
               </Chip>
             ))}

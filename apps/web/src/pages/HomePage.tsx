@@ -6,25 +6,35 @@ import { Counter } from '../lib/motion/counter'
 import { Magnetic, TiltCard } from '../lib/motion/interactive'
 import { Marquee, SectionHeading } from '../lib/motion/marquee'
 import { Reveal, SplitWords, Stagger, StaggerItem } from '../lib/motion/reveal'
-import { DeviceArt } from '../components/ProductVisual'
+import { ProductThumb, hueFor } from '../components/ProductVisual'
 import { ProductCard } from '../components/ProductCard'
 import { StarRating } from '../components/StarRating'
 import { TrustBar } from '../components/TrustBar'
 import { SiteLayout } from '../components/SiteLayout'
 import { Icon, type IconName } from '../components/icons'
 import { Section, Stat } from '../components/ui'
-import { CATEGORIES, dealProducts, featuredProducts, products, reviews } from '../data/products'
-import type { ArtKind } from '../types'
+import { useCatalog, useRecentReviews, discountPercent } from '../lib/catalog'
+import type { Product } from '../types'
 import { money } from '../lib/money'
 
-const CATEGORY_ART: { art: ArtKind; hue: number; icon: IconName }[] = [
-  { art: 'laptop', hue: 224, icon: 'Laptop' },
-  { art: 'monitor', hue: 196, icon: 'Monitor' },
-  { art: 'keyboard', hue: 172, icon: 'Keyboard' },
-  { art: 'mouse', hue: 210, icon: 'Mouse' },
-  { art: 'headset', hue: 250, icon: 'Headset' },
-  { art: 'dock', hue: 300, icon: 'Dock' },
+/**
+ * Categories are created by admins, so the icon is matched on the name instead
+ * of an index. Anything unrecognised falls back to a generic chip icon.
+ */
+const CATEGORY_ICONS: { match: RegExp; icon: IconName }[] = [
+  { match: /lap|notebook|macbook|portable/i, icon: 'Laptop' },
+  { match: /monitor|display|screen|panel/i, icon: 'Monitor' },
+  { match: /key|board|input/i, icon: 'Keyboard' },
+  { match: /mouse|pointer|trackpad/i, icon: 'Mouse' },
+  { match: /head|audio|speaker|ear/i, icon: 'Headset' },
+  { match: /dock|hub|adapter|port/i, icon: 'Dock' },
+  { match: /cable|charger|power/i, icon: 'Bolt' },
+  { match: /component|part|gear|accessor/i, icon: 'Cpu' },
 ]
+
+function categoryIcon(name: string): IconName {
+  return CATEGORY_ICONS.find((entry) => entry.match.test(name))?.icon ?? 'Cpu'
+}
 
 const STEPS = [
   {
@@ -42,6 +52,8 @@ const STEPS = [
 ]
 
 export function HomePage() {
+  const { categories, featuredProducts, dealProducts } = useCatalog()
+  const reviews = useRecentReviews(6)
   const featured = featuredProducts()
   const deals = dealProducts()
   const topDeal = deals[0]
@@ -164,10 +176,8 @@ export function HomePage() {
           className="mt-10 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-6"
           stagger={0.06}
         >
-          {CATEGORIES.map((category, i) => {
-            const meta = CATEGORY_ART[i]
-            const count = products.filter((p) => p.category === category.name).length
-            const I = Icon[meta.icon]
+          {categories.map((category) => {
+            const I = Icon[categoryIcon(category.name)]
             return (
               <StaggerItem key={category.name}>
                 <TiltCard className="h-full" max={8}>
@@ -178,12 +188,12 @@ export function HomePage() {
                     <span
                       className="pointer-events-none absolute inset-x-0 -top-10 h-24 opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100"
                       style={{
-                        background: `radial-gradient(60% 100% at 50% 100%, hsl(${meta.hue} 90% 55% / 0.5), transparent 70%)`,
+                        background: `radial-gradient(60% 100% at 50% 100%, hsl(${hueFor(category.id)} 90% 55% / 0.5), transparent 70%)`,
                       }}
                     />
 
                     <span className="relative mb-2 flex size-16 items-center justify-center">
-                      <DeviceArt kind={meta.art} hue={meta.hue} className="size-16" />
+                      <I className="size-9" />
                     </span>
 
                     <span className="relative mt-1 text-[13px] leading-tight font-bold text-ink transition-colors group-hover:text-brand-oncanvas">
@@ -191,7 +201,7 @@ export function HomePage() {
                     </span>
                     <span className="relative mt-1 inline-flex items-center gap-1 text-[11px] text-ink-subtle">
                       <I className="size-3" />
-                      {count} {count === 1 ? 'product' : 'products'}
+                      {category.productCount} {category.productCount === 1 ? 'product' : 'products'}
                     </span>
                   </Link>
                 </TiltCard>
@@ -406,14 +416,18 @@ function HeroShowcase() {
   const y = useTransform(scrollY, [0, 700], [0, 90])
   const rotate = useTransform(scrollY, [0, 700], [0, 6])
 
+  const { featuredProducts, products } = useCatalog()
   const cards = useMemo(
-    () =>
-      [
-        { product: products[0], angle: -7, offset: 'translate-y-6' },
-        { product: products[4], angle: 5, offset: 'translate-y-16' },
-        { product: products[8], angle: 0, offset: 'translate-y-0' },
-      ] as const,
-    [],
+    () => {
+      const picks = (featuredProducts().length >= 3 ? featuredProducts() : products).slice(0, 3)
+      const layout = [
+        { angle: -7, offset: 'translate-y-6' },
+        { angle: 5, offset: 'translate-y-16' },
+        { angle: 0, offset: 'translate-y-0' },
+      ] as const
+      return picks.map((product, i) => ({ product, ...layout[i] }))
+    },
+    [featuredProducts, products],
   )
 
   return (
@@ -429,6 +443,11 @@ function HeroShowcase() {
       />
 
       <div className="absolute inset-0">
+        {cards.length === 0 && (
+          <p className="absolute inset-0 flex items-center justify-center text-center text-sm text-ink-subtle">
+            New hardware is on the way.
+          </p>
+        )}
         {cards.map((card, i) => (
           <motion.div
             key={card.product.id}
@@ -455,23 +474,8 @@ function HeroShowcase() {
                 to={`/product/${card.product.slug}`}
                 className="group panel ring-gradient relative block overflow-hidden p-2 transition-transform duration-500 hover:scale-105"
               >
-                <div
-                  className="relative aspect-[4/3] overflow-hidden rounded-xl"
-                  style={{
-                    background: `linear-gradient(140deg, hsl(${card.product.hue} 62% 20%), #070911)`,
-                  }}
-                >
-                  <span
-                    className="absolute inset-0"
-                    style={{
-                      background: `radial-gradient(70% 70% at 25% 20%, hsl(${card.product.hue} 90% 55% / 0.5), transparent 70%)`,
-                    }}
-                  />
-                  <DeviceArt
-                    kind={card.product.art}
-                    hue={card.product.hue}
-                    className="absolute inset-0 size-full p-3"
-                  />
+                <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-ink">
+                  <ProductThumb product={card.product} />
                 </div>
                 <div className="px-2 py-2.5">
                   <p className="truncate text-[11px] font-bold text-ink">{card.product.name}</p>
@@ -599,7 +603,7 @@ function DealBand({
   deal,
   off,
 }: {
-  deal: (typeof products)[number]
+  deal: Product
   off: number
 }) {
   const [target] = useState(() => nextReset(new Date()))
@@ -635,7 +639,7 @@ function DealBand({
             </h2>
 
             <p className="mt-4 max-w-lg text-sm leading-relaxed text-ink-muted sm:text-base">
-              {deal.highlights[0]}
+              {deal.badge ?? `Save ${discountPercent(deal) ?? 0}% while the reduced price lasts.`}
             </p>
 
             <div className="mt-7 flex flex-wrap items-end gap-4">
@@ -693,19 +697,8 @@ function DealBand({
                 to={`/product/${deal.slug}`}
                 className="group panel ring-gradient block overflow-hidden p-2"
               >
-                <div
-                  className="relative aspect-[4/3] overflow-hidden rounded-xl"
-                  style={{
-                    background: `linear-gradient(140deg, hsl(${deal.hue} 60% 20%), #070911)`,
-                  }}
-                >
-                  <span
-                    className="absolute inset-0"
-                    style={{
-                      background: `radial-gradient(70% 70% at 30% 20%, hsl(${deal.hue} 92% 55% / 0.55), transparent 70%)`,
-                    }}
-                  />
-                  <DeviceArt kind={deal.art} hue={deal.hue} className="absolute inset-0 size-full p-4" />
+                <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-ink">
+                  <ProductThumb product={deal} />
                   <span className="absolute top-3 left-3 badge bg-rose-500 text-ink shadow-lg shadow-rose-500/30">
                     &minus;{off}%
                   </span>
@@ -713,9 +706,11 @@ function DealBand({
                 <div className="flex items-center justify-between px-3 py-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-bold text-ink">{deal.name}</p>
-                    <div className="mt-1">
-                      <StarRating rating={deal.rating} reviewCount={deal.reviewCount} />
-                    </div>
+                    {deal.rating !== null && (
+                      <div className="mt-1">
+                        <StarRating rating={deal.rating} reviewCount={deal.reviewCount} />
+                      </div>
+                    )}
                   </div>
                   <span className="shrink-0 rounded-xl border border-line bg-surface-inset px-3 py-2 text-sm font-bold text-ink">
                     {deal.stock} in stock
@@ -735,7 +730,35 @@ function DealBand({
 /* -------------------------------------------------------------------------- */
 
 function ComparePreview() {
-  const items = [products[3], products[4], products[5]]
+  const { featuredProducts, products } = useCatalog()
+
+  const items = useMemo(() => {
+    const pool = featuredProducts().length >= 3 ? featuredProducts() : products
+    return pool.slice(0, 3)
+  }, [featuredProducts, products])
+
+  // Highlights are derived from the live catalog rather than curated by hand, so
+  // they stay accurate as prices, ratings and stock change.
+  const highlights = useMemo(() => {
+    const rated = [...items].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+    const value = [...items].sort(
+      (a, b) => (b.rating ?? 0) / (b.price || 1) - (a.rating ?? 0) / (a.price || 1),
+    )
+    const popular = [...items].sort((a, b) => b.reviewCount - a.reviewCount)
+    return [
+      { label: 'Best rated', value: rated[0]?.name },
+      { label: 'Best value', value: value[0]?.name },
+      { label: 'Most reviewed', value: popular[0]?.name },
+    ].filter((row): row is { label: string; value: string } => Boolean(row.value))
+  }, [items])
+
+  if (items.length === 0) {
+    return (
+      <div className="panel flex aspect-[4/3] items-center justify-center p-6 text-center text-sm text-ink-subtle">
+        Compare products once the first ones are listed.
+      </div>
+    )
+  }
 
   return (
     <div className="panel overflow-hidden">
@@ -746,17 +769,8 @@ function ComparePreview() {
             to={`/product/${p.slug}`}
             className="group p-3 transition-colors hover:bg-surface-glass"
           >
-            <div
-              className="relative aspect-square overflow-hidden rounded-lg"
-              style={{ background: `linear-gradient(140deg, hsl(${p.hue} 60% 20%), #070911)` }}
-            >
-              <span
-                className="absolute inset-0"
-                style={{
-                  background: `radial-gradient(70% 70% at 30% 25%, hsl(${p.hue} 90% 55% / 0.5), transparent 70%)`,
-                }}
-              />
-              <DeviceArt kind={p.art} hue={p.hue} className="absolute inset-0 size-full p-1.5" />
+            <div className="relative aspect-square overflow-hidden rounded-lg bg-ink">
+              <ProductThumb product={p} />
             </div>
             <p className="mt-2 line-clamp-2 text-[10px] leading-tight font-semibold text-body transition-colors group-hover:text-ink">
               {p.name}
@@ -769,11 +783,7 @@ function ComparePreview() {
       </div>
 
       <div className="space-y-2 border-t border-line-faint p-3">
-        {[
-          { label: 'Best rated', value: products[3].name },
-          { label: 'Lowest latency', value: products[8].name },
-          { label: 'Best value', value: products[11].name },
-        ].map((row, i) => (
+        {highlights.map((row, i) => (
           <motion.div
             key={row.label}
             initial={{ opacity: 0, x: 16 }}

@@ -13,7 +13,7 @@ import { Magnetic, TiltCard } from '../lib/motion/interactive'
 import { SectionHeading } from '../lib/motion/marquee'
 import { Stagger, StaggerItem } from '../lib/motion/reveal'
 import { useToast } from '../lib/motion/toast'
-import { productBySlug, relatedProducts, relatedReviews } from '../data/products'
+import { useProduct, useCatalog, discountPercent, isNew } from '../lib/catalog'
 import { money, moneyExact } from '../lib/money'
 
 type Tab = 'specs' | 'highlights' | 'reviews' | 'shipping'
@@ -26,13 +26,12 @@ type Tab = 'specs' | 'highlights' | 'reviews' | 'shipping'
 export function ProductDetailPage() {
   const { slug } = useParams<{ slug: string }>()
 
-  if (!slug || !productBySlug(slug)) return <Navigate to="/shop" replace />
-
-  return <ProductDetail key={slug} slug={slug} />
+  return <ProductDetail key={slug} slug={slug ?? ''} />
 }
 
 function ProductDetail({ slug }: { slug: string }) {
-  const product = productBySlug(slug)!
+  const { product, loading, error } = useProduct(slug)
+  const { products } = useCatalog()
   const { addItem, toggleWishlist, isWishlisted } = useCart()
   const { push } = useToast()
   const navigate = useNavigate()
@@ -50,16 +49,41 @@ function ProductDetail({ slug }: { slug: string }) {
   const y = useTransform(scrollYProgress, [0, 1], [70, 0])
   const rotate = useTransform(scrollYProgress, [0, 1], [16, 0])
 
-  const related = relatedProducts(product)
-  const productReviews = relatedReviews(product.id)
-  const saved = isWishlisted(product.id)
-  const discount = product.compareAtPrice
-    ? Math.round((1 - product.price / product.compareAtPrice) * 100)
-    : 0
-  const perMonth = (product.price / 12).toFixed(2)
+  const saved = product ? isWishlisted(product.id) : false
+  const discount = product ? (discountPercent(product) ?? 0) : 0
+  const perMonth = product ? (product.price / 12).toFixed(2) : '0.00'
+  const released = product?.releasedAt
+    ? new Date(product.releasedAt).toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      })
+    : null
+  const dispatch =
+    product?.inStock && product.stock > 0
+      ? 'Ships today'
+      : 'Ships in 3\u20135 business days'
 
-  const add = (goToCheckout = false) => {
-    addItem(product.id, quantity)
+  // Same-category picks, falling back to anything else so the grid is never empty.
+  const related = product
+    ? products
+        .filter((p) => p.id !== product.id && p.inStock)
+        .sort((a, b) => {
+          const aScore = a.category === product.category ? 1 : 0
+          const bScore = b.category === product.category ? 1 : 0
+          return bScore - aScore || (b.rating ?? 0) - (a.rating ?? 0)
+        })
+        .slice(0, 4)
+    : []
+
+  if (loading) return <ProductSkeleton />
+  if (error === 'not-found' || !product) return <Navigate to="/shop" replace />
+
+  const add = async (goToCheckout = false) => {
+    // The signed-in cart is server-side and can fail, so only announce success
+    // (and only send the shopper to checkout) once the write has landed. The
+    // cart context surfaces the reason when it does not.
+    if (!(await addItem(product.id, quantity))) return
     push({
       tone: 'success',
       title: `${quantity} × ${product.name}`,
@@ -107,7 +131,7 @@ function ProductDetail({ slug }: { slug: string }) {
                 <div className="absolute bottom-5 left-5 flex flex-wrap gap-1.5">
                   <StockPill stock={product.stock} label={product.stockLabel} />
                   <span className="badge border border-line-faint bg-canvas/70 text-body backdrop-blur-md">
-                    {product.shipsIn}
+                    {dispatch}
                   </span>
                 </div>
               </div>
@@ -138,12 +162,12 @@ function ProductDetail({ slug }: { slug: string }) {
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <Link
-                to={`/shop?brand=${encodeURIComponent(product.brand)}`}
+                to={`/shop?brand=${encodeURIComponent(product.brand ?? '')}`}
                 className="badge border border-line bg-surface-inset text-body transition hover:border-brand-400/50 hover:text-ink"
               >
-                {product.brand}
+                {product.brand ?? product.category}
               </Link>
-              {product.isNew && (
+              {isNew(product) && (
                 <span className="badge bg-linear-to-r from-accent-500 to-brand-500 text-ink">
                   New arrival
                 </span>
@@ -158,13 +182,23 @@ function ProductDetail({ slug }: { slug: string }) {
             </h1>
 
             <div className="mt-3 flex flex-wrap items-center gap-4">
-              <StarRating rating={product.rating} reviewCount={product.reviewCount} size="md" />
+              {product.rating === null ? (
+                <span className="text-xs text-ink-subtle">Not yet rated</span>
+              ) : (
+                <StarRating
+                  rating={product.rating}
+                  reviewCount={product.reviewCount}
+                  size="md"
+                />
+              )}
+              {released && (
+                <>
+                  <span className="h-3 w-px bg-surface-glass-hover" />
+                  <span className="text-xs text-ink-subtle">Released {released}</span>
+                </>
+              )}
               <span className="h-3 w-px bg-surface-glass-hover" />
-              <span className="text-xs text-ink-subtle">
-                Released {product.releasedOn}
-              </span>
-              <span className="h-3 w-px bg-surface-glass-hover" />
-              <span className="text-xs text-ink-subtle">SKU {product.id.toUpperCase()}</span>
+              <span className="text-xs text-ink-subtle">SKU {product.sku}</span>
             </div>
 
             <div className="mt-6 flex flex-wrap items-end gap-4">
@@ -275,7 +309,7 @@ function ProductDetail({ slug }: { slug: string }) {
               </span>
               <span className="flex items-center gap-1.5">
                 <Icon.Truck className="size-3.5 text-amber-400" />
-                {product.shipsIn}
+                {dispatch}
               </span>
             </div>
           </div>
@@ -291,7 +325,7 @@ function ProductDetail({ slug }: { slug: string }) {
             tabs={[
               { id: 'specs', label: 'Specifications', count: product.specs.length },
               { id: 'highlights', label: 'Why we list it' },
-              { id: 'reviews', label: 'Reviews', count: productReviews.length },
+              { id: 'reviews', label: 'Reviews', count: product.reviews.length },
               { id: 'shipping', label: 'Shipping & returns' },
             ]}
           />
@@ -343,7 +377,7 @@ function ProductDetail({ slug }: { slug: string }) {
 
               {tab === 'reviews' && (
                 <Stagger className="grid gap-4 md:grid-cols-2" stagger={0.08}>
-                  {productReviews.map((review) => (
+                  {product.reviews.map((review) => (
                     <StaggerItem key={review.id}>
                       <figure className="panel h-full p-5">
                         <div className="flex items-start justify-between gap-3">
@@ -376,7 +410,7 @@ function ProductDetail({ slug }: { slug: string }) {
                     {
                       icon: <Icon.Truck className="size-5" />,
                       title: 'Dispatch',
-                      body: `In-stock items are packaged the same day. ${product.shipsIn.toLowerCase()}, tracked from the moment it leaves us.`,
+                      body: `In-stock items are packaged the same day. ${dispatch.toLowerCase()}, tracked from the moment it leaves us.`,
                     },
                     {
                       icon: <Icon.Refresh className="size-5" />,
@@ -447,6 +481,28 @@ function ProductDetail({ slug }: { slug: string }) {
           </div>
         </div>
       </motion.div>
+    </SiteLayout>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Loading state                                                             */
+/* -------------------------------------------------------------------------- */
+
+function ProductSkeleton() {
+  return (
+    <SiteLayout>
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="grid gap-10 lg:grid-cols-2">
+          <div className="aspect-square animate-pulse rounded-3xl border border-line-faint bg-surface-inset" />
+          <div className="space-y-4">
+            <div className="h-4 w-24 animate-pulse rounded bg-surface-inset" />
+            <div className="h-10 w-3/4 animate-pulse rounded bg-surface-inset" />
+            <div className="h-6 w-40 animate-pulse rounded bg-surface-inset" />
+            <div className="h-12 w-48 animate-pulse rounded bg-surface-inset" />
+          </div>
+        </div>
+      </div>
     </SiteLayout>
   )
 }

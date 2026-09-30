@@ -11,8 +11,15 @@ import { decimalToNumber } from '../common/serialization/decimal-to-number.js';
 import { toBigIntId } from '../common/serialization/to-bigint-id.js';
 import type { CreateOrderDto } from './dto/create-order.dto.js';
 
-const FREE_SHIPPING_THRESHOLD = 150;
-const STANDARD_SHIPPING_FEE = 14.99;
+/**
+ * Shipping policy, in Tanzanian shillings because that is the currency the
+ * storefront quotes. These must stay in step with SHIPPING_THRESHOLD and
+ * FLAT_SHIPPING in apps/web/src/lib/cart-context.tsx, which shows the same
+ * figures before checkout — if they drift, the customer is quoted one total
+ * and charged another.
+ */
+const FREE_SHIPPING_THRESHOLD = 400_000;
+const STANDARD_SHIPPING_FEE = 35_000;
 /** Not persisted as its own column (schema has no tax field on Order) — see README. */
 const TAX_RATE = 0.08;
 
@@ -39,6 +46,7 @@ export class OrdersService {
     }
 
     // Re-check stock at checkout time — it may have changed since items were added.
+// Out of transaction
     for (const item of cart.items) {
       const inventory = item.product.inventory;
       const available = inventory ? inventory.quantity - inventory.reserved : 0;
@@ -58,6 +66,8 @@ export class OrdersService {
     // `total` folds tax in since Order has no dedicated tax column yet.
     const total = subtotal + shippingFee + tax;
     const orderNumber = this.generateOrderNumber();
+
+  
 
     const order = await this.prisma.$transaction(async (tx) => {
       const address = await tx.address.create({
@@ -101,6 +111,7 @@ export class OrdersService {
         include: ORDER_INCLUDE,
       });
 
+      // N + 1: problem
       for (const item of cart.items) {
         await tx.inventory.update({
           where: { productId: item.productId },
@@ -181,7 +192,7 @@ export class OrdersService {
         country: order.address.country,
         postalCode: order.address.postalCode,
       },
-      payment: order.payments[0]
+      payment: order.payments[0] // are you sure always will be the first item?
         ? {
             method: order.payments[0].method,
             status: order.payments[0].status,

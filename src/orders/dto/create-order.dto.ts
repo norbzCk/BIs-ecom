@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 
 /**
  * Mirrors the PaymentMethod enum in prisma/schema.prisma. Defined locally
@@ -23,7 +23,8 @@ export class CreateOrderDto {
   @IsString()
   @MinLength(1)
   @MaxLength(30)
-  phone!: string;
+  @Matches(/^\+?[0-9]{7,15}$/, { message: 'Phone number must be between 7 and 15 digits, optionally starting with +.' })
+  phone!: string; 
 
   @IsString()
   @MinLength(1)

@@ -6,12 +6,12 @@ import { SiteLayout } from '../components/SiteLayout'
 import { StarRating } from '../components/StarRating'
 import { Icon } from '../components/icons'
 import { Breadcrumbs, EmptyState, Section, SectionTitle, Tabs } from '../components/ui'
-import { products, productBySlug } from '../data/products'
+import { useCatalog, useProductDetailsList } from '../lib/catalog'
 import { useCart } from '../lib/cart-context'
 import { Magnetic } from '../lib/motion/interactive'
 import { Reveal, Stagger, StaggerItem } from '../lib/motion/reveal'
 import { useToast } from '../lib/motion/toast'
-import type { Product } from '../types'
+import type { Product, ProductDetail } from '../types'
 import { money } from '../lib/money'
 
 const MAX = 4
@@ -19,15 +19,7 @@ const MAX = 4
 /** Spec rows are compared by label; only labels present on ≥2 items are shown. */
 type Row = { label: string; values: (string | null)[]; highlight?: boolean }
 
-const HIGH_PRIORITY = [
-  'Price',
-  'Rating',
-  'Stock',
-  'Warranty',
-  'Condition',
-  'Ships in',
-  'Released',
-]
+const HIGH_PRIORITY = ['Price', 'Rating', 'Stock', 'Warranty', 'Released']
 
 export function ComparePage() {
   const [params, setParams] = useSearchParams()
@@ -36,6 +28,7 @@ export function ComparePage() {
   const [view, setView] = useState<'table' | 'cards'>('table')
   const { addItem } = useCart()
   const { push } = useToast()
+  const { products, productBySlug } = useCatalog()
 
   const slugs = useMemo(
     () => params.get('items')?.split(',').map((s) => s.trim()).filter(Boolean) ?? [],
@@ -44,7 +37,7 @@ export function ComparePage() {
 
   const items = useMemo(
     () => slugs.map((s) => productBySlug(s)).filter((p): p is Product => Boolean(p)),
-    [slugs],
+    [slugs, productBySlug],
   )
 
   // Keep the URL in step with local state so a comparison can be shared or reloaded.
@@ -73,35 +66,40 @@ export function ComparePage() {
   }
 
   const bestPrice = items.length ? Math.min(...items.map((p) => p.price)) : 0
-  const bestRated = items.length ? Math.max(...items.map((p) => p.rating)) : 0
+  const bestRated = items.length ? Math.max(...items.map((p) => p.rating ?? 0)) : 0
+
+  // Specs live on the detail endpoint, so wait for them before building rows.
+  const details = useProductDetailsList(items.map((p) => p.slug))
 
   const rows = useMemo<Row[]>(() => {
-    if (items.length === 0) return []
+    if (details.length === 0) return []
 
     const labels = new Set<string>()
-    items.forEach((p) => p.specs.forEach((s) => labels.add(s.label)))
+    details.forEach((p) => p.specs.forEach((s) => labels.add(s.label)))
 
-    const lookup = (p: Product, label: string) =>
+    const lookup = (p: ProductDetail, label: string) =>
       p.specs.find((s) => s.label === label)?.value ?? null
 
     const high = HIGH_PRIORITY.filter((label) => label === 'Price' || labels.has(label)).map((label) => ({
       label,
-      values: items.map((p) => {
+      values: details.map((p) => {
         switch (label) {
           case 'Price':
             return money(p.price)
           case 'Rating':
-            return `${p.rating} / 5`
+            return p.rating === null ? 'Not rated' : `${p.rating} / 5`
           case 'Stock':
-            return p.stockLabel ?? (p.stock > 10 ? 'In stock' : `Only ${p.stock} left`)
+            return p.stockLabel
           case 'Warranty':
-            return lookup(p, 'Warranty') ?? '3 years'
-          case 'Condition':
-            return p.condition ?? 'New'
-          case 'Ships in':
-            return p.shipsIn
+            return lookup(p, 'Warranty')
           case 'Released':
-            return p.releasedOn
+            return p.releasedAt
+              ? new Date(p.releasedAt).toLocaleDateString('en-GB', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                })
+              : null
           default:
             return lookup(p, label)
         }
@@ -111,18 +109,20 @@ export function ComparePage() {
 
     const rest = [...labels]
       .filter((l) => !HIGH_PRIORITY.includes(l))
-      .map((label) => ({ label, values: items.map((p) => lookup(p, label)) }))
+      .map((label) => ({ label, values: details.map((p) => lookup(p, label)) }))
 
     return [...high, ...rest]
-  }, [items])
+  }, [details])
 
   const candidates = useMemo(() => {
     const q = query.trim().toLowerCase()
     return products
       .filter((p) => !items.some((i) => i.id === p.id))
-      .filter((p) => !q || `${p.name} ${p.brand} ${p.category}`.toLowerCase().includes(q))
+      .filter(
+        (p) => !q || `${p.name} ${p.brand ?? ''} ${p.category}`.toLowerCase().includes(q),
+      )
       .slice(0, 12)
-  }, [query, items])
+  }, [query, items, products])
 
   return (
     <SiteLayout>
@@ -166,7 +166,7 @@ export function ComparePage() {
             <Stagger className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" stagger={0.07}>
               {items.map((product) => {
                 const isBestPrice = product.price === bestPrice
-                const isBestRated = product.rating === bestRated
+                const isBestRated = product.rating !== null && product.rating === bestRated
                 return (
                   <StaggerItem key={product.id} className="h-full">
                     <div className="panel ring-gradient relative flex h-full flex-col overflow-hidden">
@@ -181,9 +181,6 @@ export function ComparePage() {
                       <Link
                         to={`/product/${product.slug}`}
                         className="relative block aspect-4/3 overflow-hidden"
-                        style={{
-                          background: `linear-gradient(150deg, hsl(${product.hue} 60% 18%), #070911)`,
-                        }}
                       >
                         <ProductVisual product={product} className="size-full" />
                       </Link>
@@ -208,12 +205,14 @@ export function ComparePage() {
                           )}
                         </div>
 
-                        <StarRating
-                          rating={product.rating}
-                          reviewCount={product.reviewCount}
-                          size="sm"
-                          className="mt-2.5"
-                        />
+                        {product.rating !== null && (
+                          <StarRating
+                            rating={product.rating}
+                            reviewCount={product.reviewCount}
+                            size="sm"
+                            className="mt-2.5"
+                          />
+                        )}
 
                         <p className="font-display mt-3 text-xl font-extrabold text-ink">
                           {money(product.price)}
@@ -292,12 +291,7 @@ export function ComparePage() {
                             }}
                             className="group flex w-full items-center gap-3 rounded-xl border border-line-faint bg-surface-inset p-2.5 text-left transition hover:border-brand-400/50 hover:bg-surface-inset"
                           >
-                            <span
-                              className="relative size-11 shrink-0 overflow-hidden rounded-lg"
-                              style={{
-                                background: `linear-gradient(140deg, hsl(${product.hue} 60% 20%), #070911)`,
-                              }}
-                            >
+                            <span className="size-11 shrink-0 overflow-hidden rounded-lg bg-ink">
                               <ProductVisual product={product} className="size-full" />
                             </span>
                             <span className="min-w-0 flex-1">
@@ -474,7 +468,12 @@ export function ComparePage() {
                   <h2 className="text-lg font-bold text-ink">
                     On price per review, the pick is{' '}
                     <span className="text-brand-oncanvas">
-                      {[...items].sort((a, b) => b.rating / b.price - a.rating / a.price)[0]?.name}
+                      {[...items]
+                        .sort(
+                          (a, b) =>
+                            (b.rating ?? 0) / (b.price || 1) - (a.rating ?? 0) / (a.price || 1),
+                        )
+                        .at(0)?.name}
                     </span>
                   </h2>
                   <p className="mt-2 max-w-lg text-sm text-ink-muted">

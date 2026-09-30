@@ -116,10 +116,28 @@ model Product {
   model       String?
   status      ProductStatus @default(ACTIVE)
 
+  // Merchandising. The storefront renders every one of these, so they live in
+  // the database rather than being invented in the UI.
+  /// Struck-through "was" price. Set above `price` to put the product on sale.
+  compareAtPrice Decimal?     @map("compare_at_price") @db.Decimal(12, 2)
+  /// Editorial rating out of 5, one decimal. Null until the product is rated.
+  rating         Decimal?     @db.Decimal(2, 1)
+  /// How many ratings the average above is based on.
+  reviewCount    Int          @default(0) @map("review_count")
+  /// Short merchandising label, e.g. "Top-tier selection".
+  badge          String?
+  /// Pinned to the top of the storefront landing page.
+  featured       Boolean      @default(false)
+  /// Release date, used to badge a product as new.
+  releasedAt     DateTime?    @map("released_at")
+  /// Bullet points on the product detail page.
+  highlights     String[]     @default([])
+
   category       Category                @relation(fields: [categoryId], references: [id])
   inventory      Inventory?
   images         ProductImage[]
   specifications ProductSpecification[]
+  reviews        Review[]
   cartItems      CartItem[]
   orderItems     OrderItem[]
 
@@ -127,6 +145,7 @@ model Product {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([categoryId])
+  @@index([featured])
   @@map("products")
 }
 
@@ -154,6 +173,24 @@ model ProductSpecification {
 
   @@index([productId])
   @@map("product_specifications")
+}
+
+/// Editorial customer review shown on the product detail page. Reviews are
+/// curated by an admin rather than user-submitted.
+model Review {
+  id        BigInt @id @default(autoincrement())
+  productId BigInt @map("product_id")
+  author    String
+  role      String?
+  rating    Int
+  quote     String
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([productId])
+  @@map("reviews")
 }
 
 model Inventory {

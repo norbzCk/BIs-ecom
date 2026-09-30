@@ -425,7 +425,7 @@ export function PriceTag({
   className = '',
 }: {
   price: number
-  compareAt?: number
+  compareAt?: number | null
   size?: 'sm' | 'md' | 'lg'
   className?: string
 }) {

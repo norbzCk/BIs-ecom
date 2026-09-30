@@ -1,6 +1,13 @@
+/**
+ * Mirrors the payloads the NestJS API returns (see src/products/products.service.ts
+ * and src/admin/admin-products.service.ts). There is no mock catalog any more:
+ * every Product here came out of Postgres.
+ */
+
 export interface ProductImage {
   url: string
   alt: string
+  isPrimary?: boolean
 }
 
 export interface ProductSpec {
@@ -8,54 +15,64 @@ export interface ProductSpec {
   value: string
 }
 
-export type ArtKind = 'laptop' | 'monitor' | 'keyboard' | 'mouse' | 'headset' | 'dock' | 'gpu'
+export interface Review {
+  id: string
+  author: string
+  role?: string | null
+  rating: number
+  quote: string
+  /** Denormalised by the API so the review carries the product it belongs to. */
+  product: string
+}
 
+export interface Category {
+  id: string
+  name: string
+  description: string | null
+  productCount: number
+}
+
+/** The shape every product card, cart line and compare row is built from. */
 export interface Product {
   id: string
   slug: string
   name: string
-  brand: string
+  brand: string | null
   category: string
   price: number
-  compareAtPrice?: number
-  rating: number
+  /** Struck-through price, set only when the product is on sale. */
+  compareAtPrice: number | null
+  rating: number | null
   reviewCount: number
-  badge?: string
-  stockLabel?: string
+  badge: string | null
+  featured: boolean
+  releasedAt: string | null
+  /** Primary image, or null when an admin has not uploaded one yet. */
+  image: ProductImage | null
+  inStock: boolean
+  stock: number
+  stockLabel: string
+}
+
+/** Adds the fields that only the product detail endpoint returns. */
+export interface ProductDetail extends Product {
+  model: string | null
+  sku: string
+  description: string | null
+  highlights: string[]
   images: ProductImage[]
   specs: ProductSpec[]
-  description?: string
-  /** Drives the generated product artwork (see ProductVisual). */
-  art: ArtKind
-  /** Base hue (0-360) used to tint the generated artwork and card glow. */
-  hue: number
-  /** Units on hand — drives low-stock urgency and filtering. */
-  stock: number
-  highlights: string[]
-  featured?: boolean
-  isNew?: boolean
-  /** Short marketing line shown in listings and cart lines. */
-  tagline?: string
-  /** Condition label, e.g. "Open box" or "Refurbished". */
-  condition?: string
-  /** Editorial score used to rank the "bestsellers" band on the deals page. */
-  popularity?: number
-  releasedOn: string
-  shipsIn: string
+  reviews: Review[]
+}
+
+/** Filter options the storefront builds its category and brand menus from. */
+export interface CatalogFacets {
+  brands: string[]
+  categories: Category[]
+  priceRange: { min: number; max: number }
 }
 
 export interface CartLine {
   productId: string
   quantity: number
 }
-
-export interface Review {
-  id: string
-  author: string
-  role?: string
-  rating: number
-  quote: string
-  product: string
-}
-
-export interface Testimonial extends Review {}

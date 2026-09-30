@@ -1,23 +1,16 @@
 import { AnimatePresence, motion } from 'motion/react'
-import { useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { SiteLayout } from '../components/SiteLayout'
 import { TrustBar } from '../components/TrustBar'
 import { Icon } from '../components/icons'
 import { Breadcrumbs, EmptyState, PriceTag, ProgressMeter, QuantityStepper } from '../components/ui'
 import { ProductCard } from '../components/ProductCard'
-import { DeviceArt } from '../components/ProductVisual'
-import {
-  FLAT_SHIPPING,
-  PROMO_HINT,
-  SHIPPING_THRESHOLD,
-  TAX_RATE,
-  useCart,
-} from '../lib/cart-context'
+import { ProductThumb } from '../components/ProductVisual'
+import { FLAT_SHIPPING, SHIPPING_THRESHOLD, TAX_RATE, useCart } from '../lib/cart-context'
 import { Magnetic } from '../lib/motion/interactive'
 import { useToast } from '../lib/motion/toast'
-import { featuredProducts } from '../data/products'
-import type { ArtKind } from '../types'
+import { useCatalog } from '../lib/catalog'
 import { money, moneyExact } from '../lib/money'
 
 export function CartPage() {
@@ -25,40 +18,24 @@ export function CartPage() {
     cartProducts,
     savedProducts,
     subtotal,
-    discount,
     shipping,
     tax,
     total,
-    promo,
     itemCount,
+    syncing,
     setQuantity,
     removeItem,
     moveToSaved,
     moveToCart,
     removeSaved,
-    applyPromo,
-    clearPromo,
   } = useCart()
 
   const { push } = useToast()
-  const [code, setCode] = useState('')
-  const [promoError, setPromoError] = useState<string | null>(null)
 
   const toFreeShipping = Math.max(0, SHIPPING_THRESHOLD - subtotal)
   const progress = Math.min(1, subtotal / SHIPPING_THRESHOLD)
 
-  const submitPromo = (e: React.FormEvent) => {
-    e.preventDefault()
-    const result = applyPromo(code, subtotal)
-    if (result.ok) {
-      setPromoError(null)
-      setCode('')
-      push({ tone: 'success', title: 'Promo applied', description: result.message })
-    } else {
-      setPromoError(result.message)
-    }
-  }
-
+  const { featuredProducts } = useCatalog()
   const suggestions = featuredProducts()
     .filter((p) => !cartProducts.some((c) => c.product.id === p.id))
     .slice(0, 4)
@@ -151,20 +128,9 @@ export function CartPage() {
                       <div className="flex gap-4">
                         <Link
                           to={`/product/${product.slug}`}
-                          className="relative size-24 shrink-0 overflow-hidden rounded-xl sm:size-28"
-                          style={{
-                            background: `linear-gradient(140deg, hsl(${product.hue} 62% 20%), #070911)`,
-                          }}
+                          className="size-24 shrink-0 overflow-hidden rounded-xl bg-ink sm:size-28"
                         >
-                          <span
-                            className="absolute inset-0"
-                            style={{
-                              background: `radial-gradient(70% 70% at 30% 25%, hsl(${product.hue} 90% 55% / 0.5), transparent 70%)`,
-                            }}
-                          />
-                          <span className="absolute inset-0 flex items-center justify-center p-1.5">
-                            <CartThumb hue={product.hue} art={product.art} />
-                          </span>
+                          <ProductThumb product={product} />
                         </Link>
 
                         <div className="flex min-w-0 flex-1 flex-col">
@@ -260,20 +226,8 @@ export function CartPage() {
                           transition={{ duration: 0.35 }}
                           className="panel flex items-center gap-3 p-3"
                         >
-                          <span
-                            className="relative size-14 shrink-0 overflow-hidden rounded-lg"
-                            style={{
-                              background: `linear-gradient(140deg, hsl(${product.hue} 62% 20%), #070911)`,
-                            }}
-                          >
-                            <span
-                              className="absolute inset-0 flex items-center justify-center p-1"
-                              style={{
-                                background: `radial-gradient(70% 70% at 30% 25%, hsl(${product.hue} 90% 55% / 0.45), transparent 70%)`,
-                              }}
-                            >
-                              <CartThumb hue={product.hue} art={product.art} />
-                            </span>
+                          <span className="size-14 shrink-0 overflow-hidden rounded-lg bg-ink">
+                            <ProductThumb product={product} />
                           </span>
                           <div className="min-w-0 flex-1">
                             <Link
@@ -322,26 +276,11 @@ export function CartPage() {
                     {moneyExact(subtotal)}
                   </Row>
 
-                  <AnimatePresence>
-                    {promo && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="overflow-hidden"
-                      >
-                        <Row label={`Discount · ${promo.code}`} tone="emerald">
-                          &minus;${discount.toFixed(2)}
-                        </Row>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-
                   <Row
                     label="Insured shipping"
                     tone={shipping === 0 ? 'emerald' : undefined}
                   >
-                    {shipping === 0 ? 'FREE' : `$${shipping.toFixed(2)}`}
+                    {shipping === 0 ? 'FREE' : moneyExact(shipping)}
                   </Row>
 
                   <Row label={`Sales tax (${(TAX_RATE * 100).toFixed(0)}%)`}>
@@ -362,86 +301,20 @@ export function CartPage() {
                   </motion.span>
                 </div>
 
-                {/* Promo */}
-                <form onSubmit={submitPromo} className="mt-5">
-                  <label htmlFor="promo" className="label">
-                    Promotional code
-                  </label>
-
-                  {promo ? (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/12 px-3 py-2.5"
-                    >
-                      <span className="flex min-w-0 items-center gap-2">
-                        <Icon.Check className="size-4 shrink-0 text-emerald-400" />
-                        <span className="min-w-0">
-                          <span className="block text-sm font-bold text-emerald-200">
-                            {promo.code}
-                          </span>
-                          <span className="block truncate text-[11px] text-emerald-300/80">
-                            {promo.label}
-                          </span>
-                        </span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          clearPromo()
-                          setPromoError(null)
-                        }}
-                        aria-label="Remove promo code"
-                        className="shrink-0 text-emerald-300 transition hover:text-ink"
-                      >
-                        <Icon.X className="size-4" />
-                      </button>
-                    </motion.div>
-                  ) : (
-                    <>
-                      <div className="mt-2 flex gap-2">
-                        <input
-                          id="promo"
-                          value={code}
-                          onChange={(e) => {
-                            setCode(e.target.value)
-                            setPromoError(null)
-                          }}
-                          placeholder="Enter code"
-                          className="input"
-                        />
-                        <button type="submit" className="btn-ghost shrink-0">
-                          Apply
-                        </button>
-                      </div>
-                      <AnimatePresence>
-                        {promoError && (
-                          <motion.p
-                            initial={{ opacity: 0, y: -6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0 }}
-                            className="mt-2 flex items-start gap-1.5 text-[11px] text-rose-300"
-                          >
-                            <Icon.Alert className="mt-px size-3.5 shrink-0" />
-                            {promoError}
-                          </motion.p>
-                        )}
-                      </AnimatePresence>
-                      <p className="mt-2 text-[11px] text-ink-subtle">{PROMO_HINT}</p>
-                    </>
-                  )}
-                </form>
-
                 <Magnetic strength={0.18} className="mt-5 w-full">
-                  <Link to="/checkout" className="btn-primary sheen w-full px-6 py-3.5 text-base">
+                  <Link
+                    to="/checkout"
+                    aria-busy={syncing}
+                    className="btn-primary sheen w-full px-6 py-3.5 text-base"
+                  >
                     <Icon.Shield className="size-4" />
-                    Proceed to checkout
+                    {syncing ? 'Syncing cart…' : 'Proceed to checkout'}
                   </Link>
                 </Magnetic>
 
                 <p className="mt-3 text-center text-[11px] text-ink-subtle">
                   {shipping > 0
-                    ? `Shipping is $${FLAT_SHIPPING.toFixed(2)} — free over $${SHIPPING_THRESHOLD}.`
+                    ? `Shipping is ${moneyExact(FLAT_SHIPPING)} — free over ${money(SHIPPING_THRESHOLD)}.`
                     : 'Free insured shipping applied.'}
                 </p>
               </div>
@@ -449,8 +322,8 @@ export function CartPage() {
               <div className="panel mt-3 flex items-start gap-3 p-4">
                 <Icon.Info className="mt-0.5 size-4 shrink-0 text-brand-oncanvas" />
                 <p className="text-xs leading-relaxed text-ink-muted">
-                  This is a demonstration storefront. No payment is taken and no card details are
-                  stored — the card field accepts any formatted value.
+                  Shipping, tax and the final total are recalculated by the server when you place
+                  the order, so the figures above are an estimate until then.
                 </p>
               </div>
             </aside>
@@ -486,8 +359,4 @@ function Row({
       </dd>
     </div>
   )
-}
-
-function CartThumb({ hue, art }: { hue: number; art: ArtKind }) {
-  return <DeviceArt kind={art} hue={hue} className="size-full" />
 }

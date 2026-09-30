@@ -1,61 +1,105 @@
 <p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
+  <strong>Billionare</strong> — workspace-fit hardware storefront
 </p>
-
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
-
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
 ## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+Billionare is a pnpm monorepo with two halves:
+
+| Path | Stack | Role |
+| --- | --- | --- |
+| `src/` (repo root) | NestJS 11 + Prisma | HTTP API. Owns auth, catalog, cart, orders and image uploads. All routes are prefixed `/api`. |
+| `apps/web` | React 19 + Vite + Tailwind | Storefront and admin UI. Talks to the API over `/api` (proxied to the backend in dev). |
+
+Data lives in **Supabase Postgres** (via Prisma), and admin product images live in
+**Supabase Storage**. The catalog ships empty: everything the storefront shows —
+products, categories, images, specs, reviews, orders — is read from the API at
+runtime, so there is no mock or seeded fallback anywhere in `apps/web`.
+
+## Layout
+
+```
+.
+├── prisma/                  # schema + migrations (Supabase Postgres)
+├── src/                     # NestJS API
+│   ├── auth/                # register / login, JWT strategy + guard
+│   ├── admin/               # admin-only catalog CRUD, roles guard
+│   ├── storage/             # Supabase Storage uploads (admin-only)
+│   ├── products/            # public catalog, facets, reviews
+│   ├── categories/          # public categories
+│   ├── cart/                # server-side cart
+│   └── orders/              # checkout, order history
+├── apps/web/                # React storefront + admin UI
+│   └── src/
+│       ├── components/      # UI kit and product visuals
+│       ├── lib/             # catalog / cart / account / auth contexts
+│       └── pages/           # storefront pages + pages/admin/
+└── test/                    # e2e specs (real AppModule, real DATABASE_URL)
+```
 
 ## Project setup
 
 ```bash
 $ pnpm install
+$ cp .env.example .env    # then fill it in
+```
+
+Both halves share the same `.env` at the repo root.
+
+| Variable | Used by | Purpose |
+| --- | --- | --- |
+| `DATABASE_URL` | API | Prisma connection string (Supabase pooler works) |
+| `DIRECT_URL` | API, scripts | Direct Postgres connection, used by migrations |
+| `JWT_SECRET` | API | Signs the custom access tokens this app issues itself |
+| `JWT_EXPIRES_IN` | API | Access token lifetime |
+| `SUPABASE_URL` | API | Supabase project URL, for the Storage client |
+| `SUPABASE_SERVICE_ROLE_KEY` | API | Storage writes. **Server only** — never prefix it with `NEXT_PUBLIC_` |
+| `NEXT_PUBLIC_SUPABASE_URL` | web | Supabase URL for browser-side reads, if needed |
+
+`SUPABASE_SERVICE_ROLE_KEY` is optional: without it every upload endpoint
+returns `503 Storage is not configured`, and the rest of the app keeps working.
+Add it when you want image uploads to work.
+
+Then apply the schema and start both processes:
+
+```bash
+$ pnpm exec prisma migrate deploy    # apply prisma/migrations to Supabase
+$ pnpm run start:dev                 # API on :3000
+$ pnpm --filter web run dev          # storefront on :5173, /api proxied to :3000
 ```
 
 ## Compile and run the project
 
 ```bash
-# development
-$ pnpm run start
+# API
+$ pnpm run start          # production
+$ pnpm run start:dev      # watch mode
+$ pnpm run start:prod     # compiled dist/
 
-# watch mode
-$ pnpm run start:dev
-
-# production mode
-$ pnpm run start:prod
+# web
+$ pnpm --filter web run dev
+$ pnpm --filter web run build
 ```
 
 ## Run tests
 
 ```bash
-# unit tests
+# API unit tests
 $ pnpm run test
 
-# e2e tests
+# API e2e tests (boots the real AppModule against DATABASE_URL)
 $ pnpm run test:e2e
 
-# test coverage
+# coverage
 $ pnpm run test:cov
+
+# web typecheck + lint + build
+$ pnpm --filter web run build
+$ pnpm --filter web run lint
 ```
+
+e2e specs talk to a remote pooler, so a cold pool is slow on first use — the
+config already raises the timeouts accordingly.
 
 ## Admin and catalog management
 
@@ -91,6 +135,8 @@ from the database instead:
 | `POST` | `/api/admin/categories` | Create a category |
 | `PATCH` | `/api/admin/categories/:id` | Rename / re-describe |
 | `DELETE` | `/api/admin/categories/:id` | Delete (refused while products use it) |
+| `POST` | `/api/admin/uploads/images` | Upload product images (multipart `files[]`) |
+| `DELETE` | `/api/admin/uploads/images` | Delete stored images by URL |
 
 The public `GET /api/categories` and `GET /api/products` are unchanged and only ever
 show `ACTIVE` products.
@@ -103,13 +149,37 @@ show `ACTIVE` products.
 | `sku` | required, unique |
 | `categoryId` | required, must exist (create categories first) |
 | `price` | required, greater than 0 |
-| `images` | required, at least 1 valid URL. Exactly one is stored as primary: the first one marked `isPrimary`, otherwise the first image |
+| `images` | required, `[{ url, isPrimary? }]`, at least one entry. Exactly one is stored as primary: the first one marked `isPrimary`, otherwise the first image |
 | `inventory.quantity` | required, integer >= 0 (starting stock) |
 | `slug` | optional, unique; derived from `name` (`-2`, `-3` on collision) when omitted |
 | `brand`, `model`, `description`, `specifications[]`, `status` | optional (`status` defaults to `ACTIVE`) |
 
 Validation failures return `400` with one message per problem, and unknown fields are
 rejected. Duplicate `sku` / `slug` / category name return `409`.
+
+### Product images
+
+Uploading from disk is a two-step flow, handled by `apps/web/src/lib/api-client.ts`:
+
+1. `POST /api/admin/uploads/images` with one or more files as `files[]`. The
+   response is `{ urls: string[] }` of public Storage URLs.
+2. Send those URLs in the product's `images` array on create/update.
+
+Limits and behaviour: 5 MiB per file, `png` / `jpg` / `webp` / `avif` / `gif`
+only, up to 10 files per request. Every file is stored under a generated UUID
+sharded by its first two hex characters so names never collide, and the bucket
+is created public on first use if it is missing. A rejected file type does not
+stop the others in the batch from being stored.
+
+Responses worth knowing: `201` with one `{ url, path }` per accepted file, `400`
+when nothing was attached or a type is not allowed, `413` when the request
+exceeds the size limit (Multer rejects it before the handler runs), and `503`
+when `SUPABASE_SERVICE_ROLE_KEY` is absent.
+
+Deleting is best-effort cleanup: `DELETE /api/admin/uploads/images` with
+`{ urls: [...] }` removes each object that lives in our bucket and ignores URLs
+pointing anywhere else. Replacing a product's `images` array also drops the
+Storage objects that are no longer referenced, so old files do not accumulate.
 
 ### Notes
 
@@ -123,6 +193,23 @@ rejected. Duplicate `sku` / `slug` / category name return `409`.
   `@Type(() => Number)`.
 - **Admin sessions are stateless JWTs.** Demoting or disabling an admin does not revoke a
   token already issued; it stays valid until `JWT_EXPIRES_IN`. Keep that short if it matters.
+
+## Pricing rules
+
+Checkout totals are computed on the server in `src/orders/orders.service.ts`:
+
+| Rule | Value | Notes |
+| --- | --- | --- |
+| Standard delivery | TSh 35,000 | Charged when the subtotal is not over the threshold |
+| Free delivery | over TSh 400,000 | Applied server-side, not requested by the client |
+| Tax | 8% of subtotal | Folded into `Order.total`; there is no `tax` column on `Order` yet |
+
+The storefront quotes the same figures before you submit, from
+`SHIPPING_THRESHOLD` and `FLAT_SHIPPING` in `apps/web/src/lib/cart-context.tsx`.
+They are duplicated rather than shared, so **change both** — if they drift, the
+customer sees one total and the server records another. The client copy is only
+an estimate: the response to `POST /api/orders` is authoritative, and the
+confirmation screen shows the server's figures, not the ones it predicted.
 
 ## Deployment
 

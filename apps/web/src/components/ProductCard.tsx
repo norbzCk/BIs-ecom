@@ -3,11 +3,12 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useCart } from '../lib/cart-context'
 import { useToast } from '../lib/motion/toast'
-import { ProductVisual } from './ProductVisual'
+import { ProductVisual, hueFor } from './ProductVisual'
 import { StarRating } from './StarRating'
 import { Icon } from './icons'
 import { PriceTag, StockPill } from './ui'
 import type { Product } from '../types'
+import { discountPercent, isNew } from '../lib/catalog'
 import { money } from '../lib/money'
 
 export function ProductCard({
@@ -24,14 +25,15 @@ export function ProductCard({
   const reduce = useReducedMotion()
   const [burst, setBurst] = useState(0)
   const saved = isWishlisted(product.id)
-  const discount = product.compareAtPrice
-    ? Math.round((1 - product.price / product.compareAtPrice) * 100)
-    : 0
+  const discount = discountPercent(product) ?? 0
 
-  const onAdd = (e: React.MouseEvent) => {
+  const onAdd = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    addItem(product.id, 1)
+    // Wait for the write before celebrating: a signed-in cart is server-side,
+    // so the request can fail, and the cart context has already told the user
+    // why. Bursting and claiming success regardless would be a lie.
+    if (!(await addItem(product.id, 1))) return
     setBurst((b) => b + 1)
     push({
       title: 'Added to cart',
@@ -59,7 +61,7 @@ export function ProductCard({
       viewport={{ once: true, amount: 0.15 }}
       transition={{ duration: 0.65, delay: Math.min(index, 7) * 0.05, ease: [0.16, 1, 0.3, 1] }}
       className="group panel ring-gradient relative flex flex-col overflow-hidden transition-transform duration-500 hover:-translate-y-1.5"
-      style={{ ['--hue' as string]: product.hue }}
+      style={{ ['--hue' as string]: hueFor(product.id) }}
     >
       {/* Artwork */}
       <Link
@@ -76,7 +78,7 @@ export function ProductCard({
               {product.badge}
             </span>
           )}
-          {product.isNew && (
+          {isNew(product) && (
             <span className="badge bg-linear-to-r from-accent-500 to-brand-500 text-ink shadow-lg shadow-accent-500/25">
               Just landed
             </span>
@@ -129,7 +131,7 @@ export function ProductCard({
       <div className="flex flex-1 flex-col p-4">
         <div className="flex items-center justify-between gap-2">
           <span className="text-[10px] font-semibold tracking-[0.14em] text-ink-subtle uppercase">
-            {product.brand}
+            {product.brand ?? product.category}
           </span>
           {product.stock <= 3 && (
             <span className="text-[10px] font-bold text-rose-400">{product.stock} left</span>
@@ -145,18 +147,18 @@ export function ProductCard({
 
         {!compact && (
           <div className="mt-2">
-            <StarRating rating={product.rating} reviewCount={product.reviewCount} />
+            {product.rating !== null && (
+              <StarRating rating={product.rating} reviewCount={product.reviewCount} />
+            )}
           </div>
         )}
 
-        {product.highlights[0] && !compact && (
-          <p className="mt-2.5 line-clamp-2 text-xs leading-relaxed text-ink-subtle">
-            {product.highlights[0]}
-          </p>
-        )}
-
         <div className="mt-auto pt-4">
-          <PriceTag price={product.price} compareAt={product.compareAtPrice} size="md" />
+          <PriceTag
+            price={product.price}
+            compareAt={discount > 0 ? product.compareAtPrice : null}
+            size="md"
+          />
           <div className="mt-2.5 flex items-center justify-between gap-2">
             <StockPill stock={product.stock} label={product.stockLabel} />
             <Link

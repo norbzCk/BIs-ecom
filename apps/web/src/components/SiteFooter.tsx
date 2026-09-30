@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { CATEGORIES } from '../data/products'
+import { useCatalog } from '../lib/catalog'
 import { useToast } from '../lib/motion/toast'
 import { Marquee } from '../lib/motion/marquee'
 import { Icon } from './icons'
@@ -22,10 +22,11 @@ const COMPANY_LINKS = [
   { label: 'Admin console', to: '/admin/login' },
 ]
 
-const PAYMENTS = ['Visa', 'Mastercard', 'Amex', 'Apple Pay', 'Wire']
+const PAYMENTS = ['MPESA','Visa', 'Mastercard', 'AIRTEL MONEY', 'MIXX BY YAS']
 
 export function SiteFooter() {
   const { push } = useToast()
+  const { categories } = useCatalog()
   const [email, setEmail] = useState('')
 
   const subscribe = (e: FormEvent) => {
@@ -93,7 +94,7 @@ export function SiteFooter() {
           </div>
 
           {/* Shop */}
-          <FooterColumn title="Shop" links={CATEGORIES.map((c) => ({ label: c.name, to: `/shop?category=${encodeURIComponent(c.name)}` }))} />
+          <FooterColumn title="Shop" links={categories.map((c) => ({ label: c.name, to: `/shop?category=${encodeURIComponent(c.name)}` }))} />
 
           {/* Help */}
           <FooterColumn title="Help & trust" links={TRUST_LINKS} />
