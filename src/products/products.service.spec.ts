@@ -246,5 +246,59 @@ describe('ProductsService', () => {
         { id: '1', name: 'Computers & Laptops', description: null, productCount: 8 },
       ]);
     });
+
+    it('orders by the curated position, then by name as a tiebreaker', async () => {
+      prisma.category.findMany.mockResolvedValue([]);
+
+      await service.listCategories();
+
+      expect(prisma.category.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ position: 'asc' }, { name: 'asc' }],
+        }),
+      );
+    });
+
+    it('counts only the products a customer can actually open', async () => {
+      prisma.category.findMany.mockResolvedValue([]);
+
+      await service.listCategories();
+
+      // An OUT_OF_STOCK product is still listed, a DISCONTINUED one is not, so
+      // the tile figure has to exclude DISCONTINUED.
+      expect(prisma.category.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: {
+            _count: {
+              select: { products: { where: { status: { in: ['ACTIVE', 'OUT_OF_STOCK'] } } } },
+            },
+          },
+        }),
+      );
+    });
+  });
+
+  describe('customer-visible statuses', () => {
+    it('keeps OUT_OF_STOCK products in the catalog and drops DISCONTINUED', async () => {
+      await service.findMany({ page: 1, pageSize: 12 });
+
+      expect(prisma.product.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { status: { in: ['ACTIVE', 'OUT_OF_STOCK'] } },
+        }),
+      );
+    });
+
+    it('applies the same statuses to the brand and price-range facets', async () => {
+      await service.findMany({ page: 1, pageSize: 12 });
+
+      const visible = { status: { in: ['ACTIVE', 'OUT_OF_STOCK'] } };
+      expect(prisma.product.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining(visible) }),
+      );
+      expect(prisma.product.aggregate).toHaveBeenCalledWith(
+        expect.objectContaining({ where: visible }),
+      );
+    });
   });
 });

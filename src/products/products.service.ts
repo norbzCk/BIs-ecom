@@ -21,7 +21,38 @@ type ProductDetailRow = Prisma.ProductGetPayload<{
   include: typeof PRODUCT_DETAIL_INCLUDE;
 }>;
 
-const PRODUCT_STATUSES: Prisma.ProductWhereInput['status'] = 'ACTIVE';
+/**
+ * The statuses a customer is allowed to see.
+ *
+ * OUT_OF_STOCK is deliberately included: an admin setting it means "still
+ * listed, just sold out", and the product should keep its place on the
+ * storefront carrying the Out of Stock label that stockLabel() derives from
+ * inventory, rather than silently vanishing. DISCONTINUED is the only status
+ * that hides a product, which is exactly what AdminProductsService.archive sets.
+ */
+const CUSTOMER_VISIBLE_STATUSES: Prisma.ProductWhereInput['status'] = {
+  in: ['ACTIVE', 'OUT_OF_STOCK'],
+};
+
+/**
+ * Relation count restricted to the same statuses, so the "N products" figure
+ * on a Browse tile matches what a customer actually finds after clicking it.
+ * AdminProductsService keeps its own unfiltered counts, where "every product
+ * ever attached to this row" is the correct answer.
+ */
+const CUSTOMER_VISIBLE_PRODUCT_COUNT = {
+  products: { where: { status: CUSTOMER_VISIBLE_STATUSES } },
+};
+
+/**
+ * Categories render in the curated `position` the storefront sets, not
+ * alphabetically. `name` breaks ties so categories an admin adds later (which
+ * all default to position 0) do not shuffle between requests.
+ */
+const CATEGORY_ORDER: Prisma.CategoryOrderByWithRelationInput[] = [
+  { position: 'asc' },
+  { name: 'asc' },
+];
 
 @Injectable()
 export class ProductsService {
@@ -69,8 +100,8 @@ export class ProductsService {
 
   async listCategories() {
     const categories = await this.prisma.category.findMany({
-      orderBy: { name: 'asc' },
-      include: { _count: { select: { products: true } } },
+      orderBy: CATEGORY_ORDER,
+      include: { _count: { select: CUSTOMER_VISIBLE_PRODUCT_COUNT } },
     });
 
     return categories.map((category) => ({
@@ -83,7 +114,7 @@ export class ProductsService {
 
   private buildWhere(query: QueryProductsDto): Prisma.ProductWhereInput {
     return {
-      status: PRODUCT_STATUSES,
+      status: CUSTOMER_VISIBLE_STATUSES,
       ...(query.category && {
         category: { name: { equals: query.category, mode: 'insensitive' } },
       }),
@@ -143,17 +174,17 @@ export class ProductsService {
   private async buildFacets() {
     const [brands, categories, range] = await this.prisma.$transaction([
       this.prisma.product.findMany({
-        where: { status: PRODUCT_STATUSES, brand: { not: null } },
+        where: { status: CUSTOMER_VISIBLE_STATUSES, brand: { not: null } },
         distinct: ['brand'],
         select: { brand: true },
         orderBy: { brand: 'asc' },
       }),
       this.prisma.category.findMany({
-        orderBy: { name: 'asc' },
-        include: { _count: { select: { products: true } } },
+        orderBy: CATEGORY_ORDER,
+        include: { _count: { select: CUSTOMER_VISIBLE_PRODUCT_COUNT } },
       }),
       this.prisma.product.aggregate({
-        where: { status: PRODUCT_STATUSES },
+        where: { status: CUSTOMER_VISIBLE_STATUSES },
         _min: { price: true },
         _max: { price: true },
       }),
