@@ -1,75 +1,83 @@
+import { randomInt } from 'node:crypto';
 import {
   BadRequestException,
-  ForbiddenException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Prisma } from '../generated/prisma/client.js';
+import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { CartService } from '../cart/cart.service.js';
 import { decimalToNumber } from '../common/serialization/decimal-to-number.js';
 import { toBigIntId } from '../common/serialization/to-bigint-id.js';
 import type { CreateOrderDto } from './dto/create-order.dto.js';
 
-/**
- * Shipping policy, in Tanzanian shillings because that is the currency the
- * storefront quotes. These must stay in step with SHIPPING_THRESHOLD and
- * FLAT_SHIPPING in apps/web/src/lib/cart-context.tsx, which shows the same
- * figures before checkout — if they drift, the customer is quoted one total
- * and charged another.
- */
-const FREE_SHIPPING_THRESHOLD = 400_000;
-const STANDARD_SHIPPING_FEE = 35_000;
+// Money constants are Decimals so we never do float arithmetic on currency.
+const FREE_SHIPPING_THRESHOLD = new Prisma.Decimal(400_000);
+const STANDARD_SHIPPING_FEE = new Prisma.Decimal(35_000);
 /** Not persisted as its own column (schema has no tax field on Order) — see README. */
-const TAX_RATE = 0.08;
+const TAX_RATE = new Prisma.Decimal('0.08');
 
-const ORDER_INCLUDE = {
+const CART_INCLUDE = {
+  items: { include: { product: true } },
+} satisfies Prisma.CartInclude;
+
+// Detail view: only the latest payment is loaded, in a deterministic order.
+const ORDER_DETAIL_INCLUDE = {
   items: { include: { product: true } },
   address: true,
-  payments: true,
+  payments: { orderBy: { id: 'desc' }, take: 1 },
 } satisfies Prisma.OrderInclude;
 
-type OrderRow = Prisma.OrderGetPayload<{ include: typeof ORDER_INCLUDE }>;
+// List view: only what toSummary() actually uses.
+const ORDER_SUMMARY_SELECT = {
+  id: true,
+  orderNumber: true,
+  status: true,
+  total: true,
+  createdAt: true,
+  items: { select: { quantity: true } },
+} satisfies Prisma.OrderSelect;
+
+type OrderDetailRow = Prisma.OrderGetPayload<{ include: typeof ORDER_DETAIL_INCLUDE }>;
+type OrderSummaryRow = Prisma.OrderGetPayload<{ select: typeof ORDER_SUMMARY_SELECT }>;
+type CartItemRow = Prisma.CartGetPayload<{ include: typeof CART_INCLUDE }>['items'][number];
 
 @Injectable()
 export class OrdersService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly cartService: CartService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async checkout(userId: bigint, dto: CreateOrderDto) {
-    const cart = await this.cartService.getOrCreateCart(userId);
-
-    if (cart.items.length === 0) {
-      throw new BadRequestException('Your cart is empty');
-    }
-
-    // Re-check stock at checkout time — it may have changed since items were added.
-// Out of transaction
-    for (const item of cart.items) {
-      const inventory = item.product.inventory;
-      const available = inventory ? inventory.quantity - inventory.reserved : 0;
-      if (item.quantity > available) {
-        throw new BadRequestException(
-          `Only ${Math.max(available, 0)} unit(s) of "${item.product.name}" available`,
-        );
-      }
-    }
-
-    const subtotal = cart.items.reduce(
-      (sum, item) => sum + decimalToNumber(item.unitPrice) * item.quantity,
-      0,
-    );
-    const shippingFee = subtotal > FREE_SHIPPING_THRESHOLD ? 0 : STANDARD_SHIPPING_FEE;
-    const tax = Math.round(subtotal * TAX_RATE * 100) / 100;
-    // `total` folds tax in since Order has no dedicated tax column yet.
-    const total = subtotal + shippingFee + tax;
-    const orderNumber = this.generateOrderNumber();
-
-  
-
+    // Everything (cart read, stock check, order creation) happens in ONE transaction,
+    // so nothing can change between "check" and "write".
     const order = await this.prisma.$transaction(async (tx) => {
+      const cart = await tx.cart.findFirst({ where: { userId }, include: CART_INCLUDE });
+
+      if (!cart || cart.items.length === 0) {
+        throw new BadRequestException('Your cart is empty');
+      }
+
+      // Claim the cart first. If a concurrent checkout (double click, two tabs)
+      // already emptied it, the count won't match and we abort instead of
+      // creating a duplicate order.
+      const claimed = await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
+      if (claimed.count !== cart.items.length) {
+        throw new ConflictException('Your cart changed during checkout. Please try again.');
+      }
+
+      // Atomic stock check + decrement. Throws (and rolls everything back) if short.
+      await this.decrementStock(tx, cart.items);
+
+      const subtotal = cart.items.reduce(
+        (sum, item) => sum.plus(item.unitPrice.mul(item.quantity)),
+        new Prisma.Decimal(0),
+      );
+      const shippingFee = subtotal.gt(FREE_SHIPPING_THRESHOLD)
+        ? new Prisma.Decimal(0)
+        : STANDARD_SHIPPING_FEE;
+      const tax = subtotal.mul(TAX_RATE).toDecimalPlaces(2);
+      // `total` folds tax in since Order has no dedicated tax column yet.
+      const total = subtotal.plus(shippingFee).plus(tax);
+
       const address = await tx.address.create({
         data: {
           userId,
@@ -83,11 +91,13 @@ export class OrdersService {
         },
       });
 
-      const createdOrder = await tx.order.create({
+      return tx.order.create({
         data: {
           userId,
           addressId: address.id,
-          orderNumber,
+          orderNumber: this.generateOrderNumber(),
+          // NOTE: consider a PENDING / AWAITING_PAYMENT status here; the order is
+          // only really "confirmed" once the payment succeeds.
           status: 'CONFIRMED',
           subtotal,
           shippingFee,
@@ -97,7 +107,7 @@ export class OrdersService {
               productId: item.productId,
               quantity: item.quantity,
               unitPrice: item.unitPrice,
-              subtotal: decimalToNumber(item.unitPrice) * item.quantity,
+              subtotal: item.unitPrice.mul(item.quantity),
             })),
           },
           payments: {
@@ -108,30 +118,19 @@ export class OrdersService {
             },
           },
         },
-        include: ORDER_INCLUDE,
+        include: ORDER_DETAIL_INCLUDE,
       });
-
-      // N + 1: problem
-      for (const item of cart.items) {
-        await tx.inventory.update({
-          where: { productId: item.productId },
-          data: { quantity: { decrement: item.quantity } },
-        });
-      }
-
-      await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
-
-      return createdOrder;
     });
 
-    return this.toDetail(order, tax);
+    return this.toDetail(order);
   }
 
   async findMany(userId: bigint) {
     const orders = await this.prisma.order.findMany({
       where: { userId },
-      include: ORDER_INCLUDE,
+      select: ORDER_SUMMARY_SELECT,
       orderBy: { createdAt: 'desc' },
+      // TODO: add pagination (take/skip or cursor) — this is unbounded today.
     });
 
     return orders.map((order) => this.toSummary(order));
@@ -139,30 +138,81 @@ export class OrdersService {
 
   async findOne(userId: bigint, idRaw: string) {
     const id = toBigIntId(idRaw, 'orderId');
-    const order = await this.prisma.order.findUnique({
-      where: { id },
-      include: ORDER_INCLUDE,
+
+    // Filter by owner in the query: someone else's order and a missing order
+    // look identical, so order IDs can't be probed (403 would confirm they exist).
+    const order = await this.prisma.order.findFirst({
+      where: { id, userId },
+      include: ORDER_DETAIL_INCLUDE,
     });
 
     if (!order) {
       throw new NotFoundException('Order not found');
     }
 
-    if (order.userId !== userId) {
-      throw new ForbiddenException('This order does not belong to you');
-    }
+    return this.toDetail(order);
+  }
 
-    // Tax isn't persisted, so recompute it for display from the stored subtotal.
-    const tax = Math.round(decimalToNumber(order.subtotal) * TAX_RATE * 100) / 100;
-    return this.toDetail(order, tax);
+  /**
+   * Decrements stock for every cart line in ONE statement.
+   * The WHERE clause re-checks availability at write time, so two concurrent
+   * checkouts can never both take the last unit (no overselling), and there's
+   * no per-item round trip (no N+1).
+   *
+   * The identifiers below are the mapped names from prisma/schema.prisma, not
+   * the Prisma model fields: the table is `inventory` (@@map) and the foreign
+   * key is `product_id` (@@map), so `"Inventory"` / `"productId"` would not
+   * resolve. `quantity` and `reserved` are unmapped and keep their names.
+   */
+  private async decrementStock(tx: Prisma.TransactionClient, items: CartItemRow[]) {
+    // Merge duplicate product lines so each product is updated exactly once.
+    const wanted = new Map<string, number>();
+    for (const item of items) {
+      const key = item.productId.toString();
+      wanted.set(key, (wanted.get(key) ?? 0) + item.quantity);
+    }
+    const productIds = [...wanted.keys()];
+    const quantities = productIds.map((id) => wanted.get(id)!);
+
+    // A literal VALUES list rather than two unnest() calls in one target list:
+    // the latter pairs the arrays in lockstep and silently pads the shorter one
+    // with NULLs, which would read as "unknown quantity" instead of erroring.
+    const lines = productIds.map(
+      (id, i) => Prisma.sql`(${id}::bigint, ${quantities[i]}::int)`,
+    );
+
+    const updated = await tx.$queryRaw<{ productId: bigint }[]>(Prisma.sql`
+      UPDATE "inventory" AS i
+      SET "quantity" = i."quantity" - v."qty"
+      FROM (VALUES ${Prisma.join(lines)}) AS v("product_id", "qty")
+      WHERE i."product_id" = v."product_id"
+        AND i."quantity" - i."reserved" >= v."qty"
+      RETURNING i."product_id" AS "productId"
+    `);
+
+    if (updated.length === productIds.length) return;
+
+    // At least one line was short: work out which, for a useful error message.
+    const ok = new Set(updated.map((row) => row.productId.toString()));
+    const failed = items.find((item) => !ok.has(item.productId.toString()))!;
+    const inventory = await tx.inventory.findUnique({
+      where: { productId: failed.productId },
+    });
+    const available = inventory ? Math.max(inventory.quantity - inventory.reserved, 0) : 0;
+
+    // Throwing inside $transaction rolls back the cart deletion and stock updates.
+    throw new BadRequestException(
+      `Only ${available} unit(s) of "${failed.product.name}" available`,
+    );
   }
 
   private generateOrderNumber(): string {
-    const random = Math.floor(1000 + Math.random() * 9000);
-    return `NB-${Date.now().toString(36).toUpperCase()}-${random}`;
+    // CSPRNG instead of Math.random. Keep a unique constraint on orderNumber;
+    // for extra safety, retry on Prisma error P2002.
+    return `NB-${Date.now().toString(36).toUpperCase()}-${randomInt(1000, 10000)}`;
   }
 
-  private toSummary(order: OrderRow) {
+  private toSummary(order: OrderSummaryRow) {
     return {
       id: order.id.toString(),
       orderNumber: order.orderNumber,
@@ -173,14 +223,21 @@ export class OrdersService {
     };
   }
 
-  private toDetail(order: OrderRow, tax: number) {
+  private toDetail(order: OrderDetailRow) {
+    // Derive tax from what was actually stored, instead of recomputing it with
+    // today's TAX_RATE. Old orders stay correct even if the rate changes.
+    const tax = order.total.minus(order.subtotal).minus(order.shippingFee);
+
+    // Query is ordered (newest first) and limited to 1, so this IS the latest payment.
+    const payment = order.payments[0] ?? null;
+
     return {
       id: order.id.toString(),
       orderNumber: order.orderNumber,
       status: order.status,
       subtotal: decimalToNumber(order.subtotal),
       shippingFee: decimalToNumber(order.shippingFee),
-      tax,
+      tax: decimalToNumber(tax),
       total: decimalToNumber(order.total),
       createdAt: order.createdAt,
       shippingAddress: {
@@ -192,19 +249,14 @@ export class OrdersService {
         country: order.address.country,
         postalCode: order.address.postalCode,
       },
-      payment: order.payments[0] // are you sure always will be the first item?
-        ? {
-            method: order.payments[0].method,
-            status: order.payments[0].status,
-          }
-        : null,
-      items: order.items.map((item) => ({
-        productId: item.productId.toString(),
-        name: item.product.name,
-        quantity: item.quantity,
-        unitPrice: decimalToNumber(item.unitPrice),
-        subtotal: decimalToNumber(item.subtotal),
-      })),
-    };
-  }
-}
+      payment: payment ? { method: payment.method, status: payment.status } : null,
+          items: order.items.map((item) => ({
+            productId: item.productId.toString(),
+            name: item.product.name,
+            quantity: item.quantity,
+            unitPrice: decimalToNumber(item.unitPrice),
+            subtotal: decimalToNumber(item.subtotal),
+          })),
+        };
+      }
+    }
