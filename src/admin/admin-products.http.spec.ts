@@ -368,7 +368,11 @@ describe('Admin products (HTTP)', () => {
         .expect(201);
 
       expect(prismaMock.category.create).toHaveBeenCalledWith({
-        data: { name: 'Mechanical Keyboards', description: undefined },
+        data: {
+          name: 'Mechanical Keyboards',
+          description: undefined,
+          position: 10,
+        },
       });
       expect(res.body).toEqual({
         id: '3',

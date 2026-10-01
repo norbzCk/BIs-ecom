@@ -42,13 +42,35 @@ describe('AdminCategoriesService', () => {
       const result = await service.create({ name: 'Mechanical Keyboards' });
 
       expect(prisma.category.create).toHaveBeenCalledWith({
-        data: { name: 'Mechanical Keyboards', description: undefined },
+        data: {
+          name: 'Mechanical Keyboards',
+          description: undefined,
+          position: 10,
+        },
       });
       expect(result).toEqual({
         id: '3',
         name: 'Mechanical Keyboards',
         description: null,
         productCount: 0,
+      });
+    });
+
+    it('appends a new category after the ones already on display', async () => {
+      // Accessories is seeded last at position 60, so the next category has to
+      // land at 70 rather than inheriting the schema default of 0, which would
+      // sort it above Computers.
+      prisma.category.findFirst.mockResolvedValue({ position: 60 });
+      prisma.category.create.mockResolvedValue(row());
+
+      await service.create({ name: 'Webcams' });
+
+      expect(prisma.category.findFirst).toHaveBeenCalledWith({
+        orderBy: { position: 'desc' },
+        select: { position: true },
+      });
+      expect(prisma.category.create).toHaveBeenCalledWith({
+        data: { name: 'Webcams', description: undefined, position: 70 },
       });
     });
 

@@ -18,12 +18,30 @@ export class AdminCategoriesService {
 
     try {
       const category = await this.prisma.category.create({
-        data: { name: dto.name, description: dto.description },
+        data: {
+          name: dto.name,
+          description: dto.description,
+          position: await this.nextPosition(),
+        },
       });
       return this.toResponse(category, 0);
     } catch (error) {
       throw this.mapConflict(error, dto.name);
     }
+  }
+
+  /**
+   * New categories go to the end of the Browse grid rather than inheriting the
+   * schema default of 0, which would sort them above the seeded ones. The +10
+   * step matches the spacing the seed migration uses, leaving room to insert
+   * categories between existing ones later without renumbering.
+   */
+  private async nextPosition(): Promise<number> {
+    const highest = await this.prisma.category.findFirst({
+      orderBy: { position: 'desc' },
+      select: { position: true },
+    });
+    return (highest?.position ?? 0) + 10;
   }
 
   async update(idRaw: string, dto: UpdateCategoryDto) {
