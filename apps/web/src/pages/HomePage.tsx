@@ -19,13 +19,24 @@ import { money } from '../lib/money'
 
 /**
  * Categories are created by admins, so the icon is matched on the name instead
- * of an index. Anything unrecognised falls back to a generic chip icon.
+ * of an index. First match wins, which is why the six shipped category names are
+ * pinned as exact matches at the top: the fuzzy rules below would otherwise
+ * claim "Mice" for nothing at all and let two categories collapse onto the same
+ * chip. Anything still unrecognised falls back to `Cpu`.
  */
 const CATEGORY_ICONS: { match: RegExp; icon: IconName }[] = [
+  // The six storefront categories, exactly as the seed migration spells them.
+  { match: /^computers?$/i, icon: 'Cpu' },
+  { match: /^monitors?$/i, icon: 'Monitor' },
+  { match: /^mice$|^mouse/i, icon: 'Mouse' },
+  { match: /^keyboards?$/i, icon: 'Keyboard' },
+  { match: /^audio$/i, icon: 'Headset' },
+  { match: /^accessories$/i, icon: 'Package' },
+  // Fuzzy fallbacks for anything else an admin names.
   { match: /lap|notebook|macbook|portable/i, icon: 'Laptop' },
   { match: /monitor|display|screen|panel/i, icon: 'Monitor' },
   { match: /key|board|input/i, icon: 'Keyboard' },
-  { match: /mouse|pointer|trackpad/i, icon: 'Mouse' },
+  { match: /mouse|mice|pointer|trackpad/i, icon: 'Mouse' },
   { match: /head|audio|speaker|ear/i, icon: 'Headset' },
   { match: /dock|hub|adapter|port/i, icon: 'Dock' },
   { match: /cable|charger|power/i, icon: 'Bolt' },
@@ -162,7 +173,11 @@ export function HomePage() {
       <Section>
         <SectionHeading
           eyebrow="Browse"
-          title="Six categories, zero filler"
+          title={
+            categories.length === 1
+              ? 'One category, zero filler'
+              : `${categories.length} categories, zero filler`
+          }
           lede="Every product in each category earns its place. If we cannot say why it is better, we do not list it."
           action={
             <Link to="/shop" className="btn-ghost btn-sm">

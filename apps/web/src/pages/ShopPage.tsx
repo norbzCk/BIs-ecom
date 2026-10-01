@@ -35,6 +35,7 @@ type BandId = (typeof PRICE_BANDS)[number]['id']
 
 export function ShopPage() {
   const [params, setParams] = useSearchParams()
+  const categoryParam = params.get('category') ?? ''
 
   const [query, setQuery] = useState(() => params.get('q') ?? '')
   const { products, categories: catalogCategories, brands: catalogBrands } = useCatalog()
@@ -64,6 +65,15 @@ export function ShopPage() {
   }, [query, categoryFilter, brands])
 
   useEffect(() => setPage(1), [query, categoryFilter, brands, band, inStockOnly, topRatedOnly, sort])
+
+  // Re-seed the category filter when the URL changes from the outside, i.e. a
+  // Browse tile, a footer link or a breadcrumb. The useState initialiser above
+  // only ever runs on mount, so without this a second category clicked while
+  // already on /shop leaves the previous filter in place. The value round-trips
+  // exactly through the write-back effect above, so this settles after one pass.
+  useEffect(() => {
+    setCategoryFilter(categoryParam ? categoryParam.split(',') : [])
+  }, [categoryParam])
 
   const minPrice = draftMin === '' ? null : Number(draftMin)
   const maxPrice = draftMax === '' ? null : Number(draftMax)

@@ -8,20 +8,14 @@ import {
   type ReactNode,
 } from 'react'
 import { ApiError, apiRequest } from './api-client'
-import type { CatalogFacets, Category, Product, ProductDetail, Review } from '../types'
-
-/* -------------------------------------------------------------------------- */
-/*  API shapes                                                                 */
-/* -------------------------------------------------------------------------- */
-
-interface ProductPage {
-  items: Product[]
-  page: number
-  pageSize: number
-  total: number
-  totalPages: number
-  facets: CatalogFacets
-}
+import type {
+  CatalogFacets,
+  Category,
+  Product,
+  ProductDetail,
+  ProductPage,
+  Review,
+} from '../types'
 
 export type ProductQuery = {
   category?: string
