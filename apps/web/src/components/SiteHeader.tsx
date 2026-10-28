@@ -8,7 +8,6 @@ import { SHIPPING_THRESHOLD } from '../lib/cart-context'
 import { ProductThumb } from './ProductVisual'
 import { Drawer } from './ui'
 import { Icon } from './icons'
-import { ThemeToggle } from './ThemeToggle'
 
 const NAV = [
   { label: 'Home', to: '/' },
@@ -114,7 +113,7 @@ export function SiteHeader() {
             }`}
           >
             {/* Logo */}
-            <Link to="/" className="group flex shrink-0 items-center gap-2.5" aria-label="Billionare home">
+            <Link to="/" className="group flex shrink-0 items-center gap-2.5" aria-label="Billionaires Computers home">
               <span className="relative flex size-9 items-center justify-center overflow-hidden rounded-xl border border-line-faint bg-linear-to-br from-brand-500 to-accent-500 transition-transform duration-500 group-hover:rotate-[18deg]">
                 <span className="absolute inset-0 animate-spin-slow bg-conic from-transparent via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
                 <img
@@ -126,7 +125,7 @@ export function SiteHeader() {
                 />
               </span>
               <span className="hidden font-display text-lg font-extrabold tracking-tight text-ink sm:block">
-                Billionare
+                Billionaires Computers
               </span>
             </Link>
 
@@ -219,7 +218,6 @@ export function SiteHeader() {
                 <span className="hidden sm:inline">Cart</span>
               </button>
 
-              <ThemeToggle className="size-9" />
 
               <button
                 onClick={() => setMenuOpen(true)}

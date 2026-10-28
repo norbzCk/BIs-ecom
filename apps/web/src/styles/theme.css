@@ -1,0 +1,57 @@
+/*
+ * Billionaires Computers - Design Tokens
+ * Based on reference sampling from laptopcitystore.co.tz (see docs/DESIGN.md)
+ * No hard-coded hex elsewhere - use these variables.
+ */
+
+:root {
+  /* Typography */
+  --font-sans: 'Barlow', system-ui, sans-serif;
+
+  /* Colors (Light theme default) */
+  --color-bg: #f3f5f6;
+  --color-surface: #ffffff;
+  --color-header-bg: #f0f0f0;
+  --color-footer-bg: #ffffff;
+
+  --color-text: #2f2f2f;
+  --color-text-muted: #5f6a71;
+
+  --color-border: #e1e3e4;
+  --color-border-strong: #d4d6d8;
+
+  --color-primary: #555555;
+  --color-primary-hover: #2f2f2f;
+  --color-primary-text: #ffffff;
+
+  --color-secondary: #555555;
+  --color-accent: #d81c55;
+  --color-accent-text: #c9184f;
+  --color-price: var(--color-accent-text);
+
+  --color-link: #555555;
+  --color-link-hover: #2f2f2f;
+
+  --color-success: #007a00;
+  --color-danger: #cc0000;
+  --color-warning: #ffbd00;
+  --color-sold-out: #8a9297;
+
+  /* CTA / Announcement */
+  --color-announcement-bg: #555555;
+  --color-announcement-text: #ffffff;
+  --color-cta: var(--color-accent);
+  --color-cta-hover: #b3123f;
+  --color-cta-text: #ffffff;
+  --color-focus: var(--color-accent);
+  --color-overlay: rgb(0 0 0 / 0.5);
+
+  /* Layout */
+  --radius-sm: 8px;
+  --radius-md: 8px;
+  --radius-lg: 8px;
+
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.02);
+  --shadow-md: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-lg: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+}

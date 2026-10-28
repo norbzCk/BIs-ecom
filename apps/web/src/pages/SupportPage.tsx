@@ -38,7 +38,7 @@ const CHANNELS = [
 const FAQS = [
   {
     q: 'Is this a real store?',
-    a: 'No. Billionare is a demonstration storefront. The catalog, cart and checkout all work end to end, but no payment is taken and no card details leave your browser.',
+    a: 'No. Billionaires Computers is a demonstration storefront. The catalog, cart and checkout all work end to end, but no payment is taken and no card details leave your browser.',
     group: 'orders' as Channel,
   },
   {
@@ -78,7 +78,7 @@ const FAQS = [
   },
 ]
 
-const EMAIL = 'support@billionare.example'
+const EMAIL = 'support@billionairescomputers.example'
 
 export function SupportPage() {
   const [channel, setChannel] = useState<Channel>('orders')

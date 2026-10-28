@@ -427,7 +427,7 @@ export function AdminProductEditorPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               className={field}
-              placeholder="Billionare Apex-15 Pro"
+              placeholder="Billionaires Computers Apex-15 Pro"
             />
           </label>
 
@@ -448,7 +448,7 @@ export function AdminProductEditorPage() {
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
               className={field}
-              placeholder="billionare-apex-15-pro"
+              placeholder="billionaires-computers-apex-15-pro"
             />
           </label>
 
@@ -558,7 +558,7 @@ export function AdminProductEditorPage() {
               value={brand}
               onChange={(e) => setBrand(e.target.value)}
               className={field}
-              placeholder="Billionare"
+              placeholder="Billionaires Computers"
             />
           </label>
 

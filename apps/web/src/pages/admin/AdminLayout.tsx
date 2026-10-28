@@ -1,6 +1,5 @@
 import { Link, NavLink, Navigate, Outlet } from 'react-router-dom'
 import { Icon } from '../../components/icons'
-import { ThemeToggle } from '../../components/ThemeToggle'
 import { useAdminAuth } from '../../lib/admin-auth-context'
 
 const navItems = [
@@ -24,7 +23,7 @@ export function AdminLayout() {
             <img src="/logo.png" alt="" width={28} height={28} className="size-7 rounded-lg object-contain" />
           </span>
           <div>
-            <p className="text-sm font-extrabold leading-none">Billionare</p>
+            <p className="text-sm font-extrabold leading-none">Billionaires Computers</p>
             <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-400">
               Admin
             </p>
@@ -73,7 +72,6 @@ export function AdminLayout() {
           <Link to="/" className="text-xs font-medium text-ink-muted hover:text-ink">
             ← Back to storefront
           </Link>
-          <ThemeToggle className="size-9" />
         </header>
         <main className="p-6">
           <Outlet />

@@ -37,7 +37,7 @@ export function AdminLoginPage() {
           <span className="flex size-10 items-center justify-center overflow-hidden rounded-xl">
             <img src="/logo.png" alt="" width={28} height={28} className="size-7 rounded-lg object-contain" />
           </span>
-          <span className="text-base font-extrabold text-ink">Billionare Admin</span>
+          <span className="text-base font-extrabold text-ink">Billionaires Computers Admin</span>
         </div>
 
         <p className="mt-4 text-sm text-ink-subtle">
@@ -56,7 +56,7 @@ export function AdminLoginPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="mt-1 w-full rounded-lg border border-line-faint bg-canvas-raised px-3 py-2 text-sm outline-none focus:border-brand-500"
-            placeholder="admin@billionare.com"
+            placeholder="admin@billionairescomputers.com"
           />
         </label>
 

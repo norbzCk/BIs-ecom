@@ -420,7 +420,7 @@ function ProductDetail({ slug }: { slug: string }) {
                     {
                       icon: <Icon.Shield className="size-5" />,
                       title: 'Warranty',
-                      body: 'Manufacturer warranty handled directly by Billionare. No paperwork, no third-party claims desk.',
+                      body: 'Manufacturer warranty handled directly by Billionaires Computers. No paperwork, no third-party claims desk.',
                     },
                   ].map((card) => (
                     <div key={card.title} className="panel p-5">

@@ -300,7 +300,7 @@ export function HomePage() {
           align="center"
           eyebrow="Verified reviews"
           title="What people say after the box arrives"
-          lede="Only customers who ordered from Billionare can review a product here."
+          lede="Only customers who ordered from Billionaires Computers can review a product here."
         />
 
         <div className="mt-10">

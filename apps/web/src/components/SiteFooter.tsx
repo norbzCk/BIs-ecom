@@ -4,7 +4,6 @@ import { useCatalog } from '../lib/catalog'
 import { useToast } from '../lib/motion/toast'
 import { Marquee } from '../lib/motion/marquee'
 import { Icon } from './icons'
-import { ThemeToggle } from './ThemeToggle'
 
 const TRUST_LINKS = [
   { label: 'Shipping & delivery', to: '/support#shipping' },
@@ -15,7 +14,7 @@ const TRUST_LINKS = [
 ]
 
 const COMPANY_LINKS = [
-  { label: 'About Billionare', to: '/support#about' },
+  { label: 'About Billionaires Computers', to: '/support#about' },
   { label: 'Help centre', to: '/support' },
   { label: 'Your account', to: '/account' },
   { label: 'Deals of the week', to: '/deals' },
@@ -49,7 +48,7 @@ export function SiteFooter() {
       {/* Brand marquee */}
       <div className="border-b border-line-faint py-5">
         <Marquee speed={44} className="font-display">
-          {['Intel', 'NVIDIA', 'AMD', 'ASUS', 'BenQ', 'Logitech', 'Razer', 'Billionare'].map(
+          {['Intel', 'NVIDIA', 'AMD', 'ASUS', 'BenQ', 'Logitech', 'Razer', 'Billionaires Computers'].map(
             (brand) => (
               <span
                 key={brand}
@@ -77,7 +76,7 @@ export function SiteFooter() {
                   className="size-6 rounded-[6px] object-contain"
                 />
               </span>
-              <span className="font-display text-lg font-extrabold text-ink">Billionare</span>
+              <span className="font-display text-lg font-extrabold text-ink">Billionaires Computers</span>
             </Link>
             <p className="mt-4 max-w-sm text-sm leading-relaxed text-ink-muted">
               Performance hardware, colour-accurate displays and the accessories that make a desk
@@ -139,11 +138,10 @@ export function SiteFooter() {
 
         <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t border-line-faint pt-6 sm:flex-row">
           <p className="text-xs text-ink-subtle">
-            © {new Date().getFullYear()} Billionare Retail Technologies. All rights reserved.
+            © {new Date().getFullYear()} Billionaires Computers Retail Technologies. All rights reserved.
           </p>
           <div className="flex items-center gap-3">
             <FooterColumn title="Company" links={COMPANY_LINKS} inline />
-            <ThemeToggle className="size-9" />
           </div>
         </div>
       </div>
