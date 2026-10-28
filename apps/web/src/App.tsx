@@ -130,6 +130,7 @@ export default function App() {
                         />
                       </Route>
 
+                      <Route path="/dev/ui" element={<UiPage />} />
                       <Route path="*" element={<NotFoundPage />} />
                     </Routes>
                   </Suspense>
@@ -142,3 +143,7 @@ export default function App() {
     </MotionConfig>
   );
 }
+
+const UiPage = lazy(() =>
+  import('./pages/dev/UiPage').then((m) => ({ default: m.UiPage })),
+);

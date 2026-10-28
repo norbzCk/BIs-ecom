@@ -1,201 +1,266 @@
-import { useState, type FormEvent } from 'react'
+import { Container } from './Container'
+import { store } from '../config/store'
 import { Link } from 'react-router-dom'
-import { useCatalog } from '../lib/catalog'
-import { useToast } from '../lib/motion/toast'
-import { Marquee } from '../lib/motion/marquee'
-import { Icon } from './icons'
 
-const TRUST_LINKS = [
-  { label: 'Shipping & delivery', to: '/support#shipping' },
-  { label: 'Warranty terms', to: '/support#warranty' },
-  { label: '30-day returns', to: '/support#returns' },
-  { label: 'Compare products', to: '/compare' },
-  { label: 'Enterprise procurement', to: '/support#enterprise' },
-]
+function TodoValue({ value }: { value: string }) {
+  if (typeof value === 'string' && value.indexOf('TODO_') === 0) {
+    if (import.meta.env && import.meta.env.DEV) {
+      return <span style={{ border: '1px dashed var(--color-danger)', padding: '2px 4px' }}>{value}</span>
+    }
+    return null
+  }
+  return <>{value}</>
+}
 
-const COMPANY_LINKS = [
-  { label: 'About Billionaires Computers', to: '/support#about' },
-  { label: 'Help centre', to: '/support' },
-  { label: 'Your account', to: '/account' },
-  { label: 'Deals of the week', to: '/deals' },
-  { label: 'Admin console', to: '/admin/login' },
-]
-
-const PAYMENTS = ['MPESA','Visa', 'Mastercard', 'AIRTEL MONEY', 'MIXX BY YAS']
+function SocialIcon({ href, label }: { href: string; label: string }) {
+  if (!href || (typeof href === 'string' && href.indexOf('TODO_') === 0)) return null
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={label}
+      style={{
+        width: '40px',
+        height: '40px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: 'var(--color-text)',
+        border: '1px solid var(--color-border)',
+        borderRadius: '8px',
+      }}
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+      </svg>
+    </a>
+  )
+}
 
 export function SiteFooter() {
-  const { push } = useToast()
-  const { categories } = useCatalog()
-  const [email, setEmail] = useState('')
-
-  const subscribe = (e: FormEvent) => {
-    e.preventDefault()
-    const valid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)
-    if (!valid) {
-      push({ tone: 'error', title: 'That email does not look right', description: 'Check the format and try again.' })
-      return
-    }
-    push({
-      tone: 'success',
-      title: 'You are on the list',
-      description: `Deals and build guides will land in ${email}.`,
-    })
-    setEmail('')
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   return (
-    <footer className="relative mt-auto overflow-hidden border-t border-line-faint bg-canvas-raised/60">
-      {/* Brand marquee */}
-      <div className="border-b border-line-faint py-5">
-        <Marquee speed={44} className="font-display">
-          {['Intel', 'NVIDIA', 'AMD', 'ASUS', 'BenQ', 'Logitech', 'Razer', 'Billionaires Computers'].map(
-            (brand) => (
-              <span
-                key={brand}
-                className="mx-8 flex items-center gap-2.5 text-lg font-bold tracking-tight text-ink-faint transition-colors hover:text-body sm:mx-12"
-              >
-                <span className="size-1.5 rounded-full bg-brand-500/50" />
-                {brand}
-              </span>
-            ),
-          )}
-        </Marquee>
-      </div>
-
-      <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
-        <div className="grid gap-10 lg:grid-cols-[1.4fr_1fr_1fr_1.2fr]">
-          {/* Brand */}
-          <div>
-            <Link to="/" className="flex items-center gap-2.5">
-              <span className="flex size-9 items-center justify-center rounded-xl border border-line-faint bg-linear-to-br from-brand-500 to-accent-500">
-                <img
-                  src="/logo.png"
-                  alt=""
-                  width={24}
-                  height={24}
-                  className="size-6 rounded-[6px] object-contain"
-                />
-              </span>
-              <span className="font-display text-lg font-extrabold text-ink">Billionaires Computers</span>
-            </Link>
-            <p className="mt-4 max-w-sm text-sm leading-relaxed text-ink-muted">
-              Performance hardware, colour-accurate displays and the accessories that make a desk
-              worth sitting at. Every unit verified, every warranty direct from the manufacturer.
-            </p>
-            <div className="mt-5 flex flex-wrap gap-2">
-              {['Verified stock', 'Direct warranty', '30-day returns'].map((tag) => (
-                <span key={tag} className="chip cursor-default text-[11px]">
-                  <Icon.Check className="size-3 text-emerald-400" />
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* Shop */}
-          <FooterColumn title="Shop" links={categories.map((c) => ({ label: c.name, to: `/shop?category=${encodeURIComponent(c.name)}` }))} />
-
-          {/* Help */}
-          <FooterColumn title="Help & trust" links={TRUST_LINKS} />
-
-          {/* Newsletter */}
-          <div>
-            <h3 className="text-sm font-bold text-ink">Get insider deals</h3>
-            <p className="mt-3 text-sm text-ink-muted">
-              One email a week: build guides, flash discounts and restock alerts. No noise.
-            </p>
-            <form onSubmit={subscribe} className="mt-4 flex gap-2">
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@company.com"
-                aria-label="Email address for the newsletter"
-                className="input flex-1"
-              />
-              <button type="submit" className="btn-primary shrink-0">
-                Join
-              </button>
-            </form>
-
-            <div className="mt-5">
-              <p className="text-[11px] font-semibold tracking-[0.16em] text-ink-subtle uppercase">
-                We accept
+    <footer
+      style={{
+        background: 'var(--color-footer-bg)',
+        borderTop: '1px solid var(--color-border)',
+        color: 'var(--color-text)',
+      }}
+    >
+      <Container>
+        <div
+          style={{
+            paddingBlock: '48px',
+          }}
+          className="footer-top"
+        >
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '2fr 1fr 1fr 1.5fr',
+              gap: '32px',
+            }}
+            className="footer-grid"
+          >
+            <div>
+              <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>About</h3>
+              <p style={{ fontSize: '15px', color: 'var(--color-text)', lineHeight: '1.6' }}>
+                <TodoValue value={store.about} />
               </p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {PAYMENTS.map((p) => (
-                  <span
-                    key={p}
-                    className="rounded-md border border-line-faint bg-surface-glass px-2 py-1 text-[10px] font-semibold text-ink-muted"
+            </div>
+
+            <div>
+              <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>Quick links</h3>
+              <ul style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <li>
+                  <Link to="/shop" style={{ fontSize: '15px', color: 'var(--color-text-muted)' }}>
+                    Search
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/support" style={{ fontSize: '15px', color: 'var(--color-text-muted)' }}>
+                    Privacy
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/support" style={{ fontSize: '15px', color: 'var(--color-text-muted)' }}>
+                    Refund
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/support" style={{ fontSize: '15px', color: 'var(--color-text-muted)' }}>
+                    Shipping
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/support" style={{ fontSize: '15px', color: 'var(--color-text-muted)' }}>
+                    Terms
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>Contact</h3>
+              <ul style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {store.phone && (
+                  <li>
+                    <a href={`tel:${store.phone.replace(/\s+/g, '')}`} style={{ fontSize: '15px', color: 'var(--color-text-muted)' }}>
+                      {store.phone}
+                    </a>
+                  </li>
+                )}
+                {store.whatsapp && store.whatsapp.indexOf('TODO_') !== 0 && (
+                  <li>
+                    <a
+                      href={`https://wa.me/${store.whatsapp.replace(/\+/g, '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ fontSize: '15px', color: 'var(--color-text-muted)' }}
+                    >
+                      WhatsApp
+                    </a>
+                  </li>
+                )}
+                {store.email && (
+                  <li>
+                    <a href={`mailto:${store.email}`} style={{ fontSize: '15px', color: 'var(--color-text-muted)' }}>
+                      {store.email}
+                    </a>
+                  </li>
+                )}
+                {store.address && store.address.indexOf('TODO_') !== 0 && (
+                  <li style={{ fontSize: '15px', color: 'var(--color-text-muted)' }}>
+                    <TodoValue value={store.address} />
+                  </li>
+                )}
+                {store.openingHours && store.openingHours.indexOf('TODO_') !== 0 && (
+                  <li style={{ fontSize: '15px', color: 'var(--color-text-muted)' }}>
+                    <TodoValue value={store.openingHours} />
+                  </li>
+                )}
+              </ul>
+            </div>
+
+            <div>
+              <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>Newsletter</h3>
+              {(import.meta.env && import.meta.env.DEV) || (store as any).newsletterEndpoint ? (
+                <form
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    gap: '8px',
+                    alignItems: 'center',
+                  }}
+                  className="newsletter-form"
+                >
+                  <input
+                    type="email"
+                    placeholder="Email"
+                    aria-label="Email address for newsletter"
+                    style={{
+                      height: '44px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--color-border)',
+                      background: 'var(--color-surface)',
+                      fontSize: '16px',
+                      padding: '0 12px',
+                      flex: 1,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    style={{
+                      height: '44px',
+                      background: 'var(--color-cta)',
+                      color: 'var(--color-cta-text)',
+                      border: '1px solid var(--color-cta)',
+                      borderRadius: '8px',
+                      padding: '0 16px',
+                      fontSize: '14px',
+                    }}
                   >
-                    {p}
-                  </span>
-                ))}
+                    Subscribe
+                  </button>
+                </form>
+              ) : null}
+
+              <div style={{ marginTop: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <SocialIcon href={(store as any).facebook || 'TODO_FACEBOOK'} label="Facebook" />
+                <SocialIcon href={(store as any).instagram || 'TODO_INSTAGRAM'} label="Instagram" />
+                <SocialIcon href={(store as any).linkedin || 'TODO_LINKEDIN'} label="LinkedIn" />
+                <SocialIcon href={(store as any).tiktok || 'TODO_TIKTOK'} label="TikTok" />
+                <SocialIcon href={(store as any).youtube || 'TODO_YOUTUBE'} label="YouTube" />
               </div>
             </div>
           </div>
         </div>
 
-        <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t border-line-faint pt-6 sm:flex-row">
-          <p className="text-xs text-ink-subtle">
-            © {new Date().getFullYear()} Billionaires Computers Retail Technologies. All rights reserved.
-          </p>
-          <div className="flex items-center gap-3">
-            <FooterColumn title="Company" links={COMPANY_LINKS} inline />
+        <div
+          style={{
+            paddingBlock: '32px',
+            borderTop: '1px solid var(--color-border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '16px',
+          }}
+          className="footer-bottom"
+        >
+          <div style={{ fontSize: '14px', color: 'var(--color-text)' }}>
+            © {new Date().getFullYear()} {store.name}
           </div>
-        </div>
-      </div>
-
-      {/* Bottom glow */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 -bottom-32 h-64 bg-linear-to-t from-brand-600/20 to-transparent"
-      />
-    </footer>
-  )
-}
-
-function FooterColumn({
-  title,
-  links,
-  inline = false,
-}: {
-  title: string
-  links: { label: string; to: string }[]
-  inline?: boolean
-}) {
-  if (inline) {
-    return (
-      <>
-        {links.map((link) => (
-          <Link
-            key={link.label}
-            to={link.to}
-            className="link-underline rounded-md px-2 py-1 text-xs text-ink-subtle transition-colors hover:text-body"
+          <button
+            onClick={scrollToTop}
+            aria-label="Back to top"
+            style={{
+              height: '44px',
+              padding: '0 16px',
+              border: '1px solid var(--color-border)',
+              borderRadius: '8px',
+              background: 'var(--color-surface)',
+              color: 'var(--color-text)',
+              fontSize: '14px',
+            }}
           >
-            {link.label}
-          </Link>
-        ))}
-      </>
-    )
-  }
-
-  return (
-    <div>
-      <h3 className="text-sm font-bold text-ink">{title}</h3>
-      <ul className="mt-4 space-y-2.5">
-        {links.map((link) => (
-          <li key={link.label}>
-            <Link
-              to={link.to}
-              className="group inline-flex items-center gap-1.5 text-sm text-ink-muted transition-colors hover:text-ink"
-            >
-              <span className="h-px w-0 bg-brand-400 transition-all duration-300 group-hover:w-3" />
-              {link.label}
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </div>
+            Back to top
+          </button>
+        </div>
+      </Container>
+      <style>{`
+        @media (max-width: 1024px) {
+          .footer-grid {
+            grid-template-columns: 2fr 1fr !important;
+          }
+        }
+        @media (max-width: 640px) {
+          .footer-grid {
+            grid-template-columns: 1fr !important;
+          }
+          .footer-top {
+            padding-block: 32px !important;
+          }
+          .footer-bottom {
+            justify-content: center !important;
+            flex-direction: column !important;
+            text-align: center;
+          }
+          .newsletter-form {
+            flex-direction: column !important;
+            align-items: stretch !important;
+          }
+          .newsletter-form input,
+          .newsletter-form button {
+            width: 100%;
+          }
+        }
+      `}</style>
+    </footer>
   )
 }

@@ -2,7 +2,6 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import { SiteHeader } from './SiteHeader'
 import { SiteFooter } from './SiteFooter'
-import { Icon } from './icons'
 
 export function SiteLayout({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
@@ -15,30 +14,39 @@ export function SiteLayout({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <div className="noise relative flex min-h-screen flex-col">
-      <a href="#main" className="sr-only-focusable">
+    <div style={{ display: 'flex', minHeight: '100vh', flexDirection: 'column' }}>
+      <a href="#main" className="skip-to-content">
         Skip to content
       </a>
 
       <SiteHeader />
 
-      <main id="main" className="flex-1">
+      <main id="main" style={{ flex: 1 }}>
         {children}
       </main>
 
       <SiteFooter />
 
-      {/* Back to top */}
       <button
         onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
         aria-label="Back to top"
-        className={`fixed right-5 bottom-5 z-40 flex size-11 items-center justify-center rounded-full border border-line-faint bg-surface/90 text-body shadow-lg backdrop-blur-xl transition-all duration-500 hover:border-brand-400/60 hover:text-ink ${
-          showTop
-            ? 'pointer-events-auto translate-y-0 opacity-100'
-            : 'pointer-events-none translate-y-4 opacity-0'
-        }`}
+        style={{
+          position: 'fixed',
+          right: '20px',
+          bottom: '20px',
+          width: '44px',
+          height: '44px',
+          borderRadius: '50%',
+          border: '1px solid var(--color-border)',
+          background: 'var(--color-surface)',
+          color: 'var(--color-text)',
+          display: showTop ? 'flex' : 'none',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 40,
+        }}
       >
-        <Icon.ChevronLeft className="size-4 rotate-90" />
+        ↑
       </button>
 
       <span className="sr-only" aria-live="polite">

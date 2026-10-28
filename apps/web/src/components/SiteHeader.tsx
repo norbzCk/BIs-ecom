@@ -1,495 +1,560 @@
-import { AnimatePresence, motion, useMotionValueEvent, useScroll, useSpring } from 'motion/react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useCart } from '../lib/cart-context'
+import { store } from '../config/store'
 import { useCatalog } from '../lib/catalog'
-import { money, moneyExact } from '../lib/money'
-import { SHIPPING_THRESHOLD } from '../lib/cart-context'
-import { ProductThumb } from './ProductVisual'
-import { Drawer } from './ui'
 import { Icon } from './icons'
+import { Container } from './Container'
 
-const NAV = [
-  { label: 'Home', to: '/' },
-  { label: 'Shop', to: '/shop' },
-  { label: 'Deals', to: '/deals' },
-  { label: 'Compare', to: '/compare' },
-  { label: 'Support', to: '/support' },
+const FALLBACK_CATEGORIES = [
+  'Laptops',
+  'Desktops',
+  'MacBooks',
+  'Printers',
+  'External Hard Disks',
+  'Toners & Cartridges',
 ]
 
+const MORE_CATEGORIES = [
+  'Projectors',
+  'UPS',
+  'Flash Disks',
+  'Antivirus',
+  'Monitors',
+  'Shredders',
+]
+
+function TodoValue({ value }: { value: string }) {
+  if (typeof value === 'string' && value.indexOf('TODO_') === 0) {
+    if (import.meta.env && import.meta.env.DEV) {
+      return <span style={{ border: '1px dashed var(--color-danger)', padding: '2px 4px' }}>{value}</span>
+    }
+    return null
+  }
+  return <>{value}</>
+}
+
 export function SiteHeader() {
-  const { itemCount, cartProducts, subtotal } = useCart()
-  const { categories, brands } = useCatalog()
+  const { itemCount } = useCart()
+  const { categories } = useCatalog()
   const navigate = useNavigate()
   const location = useLocation()
 
-  const [scrolled, setScrolled] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [cartOpen, setCartOpen] = useState(false)
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [suggestOpen, setSuggestOpen] = useState(false)
-  const searchRef = useRef<HTMLDivElement>(null)
+  const [selectedCategory, setSelectedCategory] = useState('All Categories')
+  const categoryDropdownRef = useRef<HTMLDivElement>(null)
+  const mobileMenuRef = useRef<HTMLDivElement>(null)
+  const firstFocusRef = useRef<HTMLButtonElement>(null)
+  const lastFocusRef = useRef<HTMLAnchorElement>(null)
 
-  const { scrollY } = useScroll()
-  const blur = useSpring(scrollY, { stiffness: 120, damping: 26, restDelta: 0.5 })
-
-  useMotionValueEvent(scrollY, 'change', (v) => setScrolled(v > 12))
-
-  // Close everything on navigation.
   useEffect(() => {
-    setMenuOpen(false)
-    setCartOpen(false)
-    setSuggestOpen(false)
+    setCategoryDropdownOpen(false)
+    setMobileMenuOpen(false)
   }, [location.pathname])
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setSuggestOpen(false)
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(e.target as Node)) {
+        setCategoryDropdownOpen(false)
       }
     }
     document.addEventListener('mousedown', onClick)
     return () => document.removeEventListener('mousedown', onClick)
   }, [])
 
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [mobileMenuOpen])
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setCategoryDropdownOpen(false)
+        setMobileMenuOpen(false)
+      }
+      if (mobileMenuOpen && e.key === 'Tab' && mobileMenuRef.current) {
+        const focusableElements = mobileMenuRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button, textarea, input, select',
+        )
+        if (focusableElements.length === 0) return
+        const firstElement = focusableElements[0]
+        const lastElement = focusableElements[focusableElements.length - 1]
+        if (e.shiftKey) {
+          if (document.activeElement === firstElement) {
+            lastElement.focus()
+            e.preventDefault()
+          }
+        } else {
+          if (document.activeElement === lastElement) {
+            firstElement.focus()
+            e.preventDefault()
+          }
+        }
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [mobileMenuOpen])
+
   const submitSearch = (e: FormEvent) => {
     e.preventDefault()
     const q = query.trim()
-    if (!q) {
-      navigate('/shop')
-      return
+    const params = new URLSearchParams()
+    if (q) params.set('q', q)
+    if (selectedCategory && selectedCategory !== 'All Categories') {
+      params.set('category', selectedCategory)
     }
-    navigate(`/shop?q=${encodeURIComponent(q)}`)
-    setSuggestOpen(false)
-    setQuery('')
+    navigate(`/shop${params.toString() ? '?' + params.toString() : ''}`)
   }
 
-  const goToSuggestion = (term: string) => {
-    setQuery('')
-    setSuggestOpen(false)
-    navigate(`/shop?q=${encodeURIComponent(term)}`)
+  const getCategoryItems = () => {
+    if (categories && categories.length > 0) {
+      const sorted = [...categories].sort((a: any, b: any) => {
+        if (a.sortOrder !== undefined && b.sortOrder !== undefined) {
+          return a.sortOrder - b.sortOrder
+        }
+        return (b.productCount || 0) - (a.productCount || 0)
+      })
+      return sorted.slice(0, 6).map((c: any) => c.name)
+    }
+    return FALLBACK_CATEGORIES
   }
 
-  // Search terms come from the live catalog, so they never point at a product
-  // that has been discontinued or renamed.
-  const suggestions = [...categories.map((c) => c.name), ...brands].slice(0, 6)
+  const categoryItems = getCategoryItems()
+  const moreItems = categories && categories.length > 0 && categories.length > 6 ? [] : MORE_CATEGORIES
 
   return (
     <>
-      <motion.header
-        style={{ backdropFilter: `blur(${Math.min(18, 6 + blur.get() / 40)}px)` }}
-        className="sticky top-0 z-50 transition-colors duration-500"
+      <a href="#main" className="skip-to-content">
+        Skip to content
+      </a>
+      <div
+        style={{
+          background: 'var(--color-announcement-bg)',
+          color: 'var(--color-announcement-text)',
+          fontSize: '14px',
+          height: '36px',
+          display: 'flex',
+          alignItems: 'center',
+        }}
+        className="w-full"
       >
-        <div
-          className={`absolute inset-0 -z-10 border-b transition-all duration-500 ${
-            scrolled
-              ? 'border-line-faint bg-canvas/85 shadow-[0_10px_40px_-20px_rgba(0,0,0,0.9)]'
-              : 'border-transparent bg-canvas/40'
-          }`}
-        />
+        <Container>
+          <div className="flex flex-col items-center justify-center gap-1 text-center sm:flex-row sm:justify-between sm:text-left">
+            <span>
+              <TodoValue value={store.freeDeliveryNote} />
+            </span>
+            <a href={`tel:${store.phone.replace(/\s+/g, '')}`} style={{ color: 'var(--color-announcement-text)' }}>
+              {store.phone}
+            </a>
+          </div>
+        </Container>
+      </div>
 
-        {/* Announcement rail */}
-        <AnimatePresence>
-          {scrolled && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-              className="overflow-hidden border-b border-line-faint bg-linear-to-r from-brand-600/20 via-navy-850 to-accent-500/15"
-            >
-              <div className="mx-auto flex max-w-7xl items-center justify-center gap-2 px-4 py-1.5 text-[11px] font-medium text-body">
-                <Icon.Bolt className="size-3 text-amber-400" />
-                Free insured delivery on every order over {money(SHIPPING_THRESHOLD)}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div
-            className={`flex items-center gap-3 transition-all duration-500 ${
-              scrolled ? 'h-14' : 'h-16 sm:h-20'
-            }`}
-          >
-            {/* Logo */}
-            <Link to="/" className="group flex shrink-0 items-center gap-2.5" aria-label="Billionaires Computers home">
-              <span className="relative flex size-9 items-center justify-center overflow-hidden rounded-xl border border-line-faint bg-linear-to-br from-brand-500 to-accent-500 transition-transform duration-500 group-hover:rotate-[18deg]">
-                <span className="absolute inset-0 animate-spin-slow bg-conic from-transparent via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
-                <img
-                  src="/logo.png"
-                  alt=""
-                  width={24}
-                  height={24}
-                  className="relative size-6 rounded-[6px] object-contain"
-                />
-              </span>
-              <span className="hidden font-display text-lg font-extrabold tracking-tight text-ink sm:block">
-                Billionaires Computers
+      <header
+        style={{
+          background: 'var(--color-header-bg)',
+          borderBottom: '1px solid var(--color-border)',
+        }}
+        className="sticky top-0 z-50 h-[56px] md:h-[64px]"
+      >
+        <Container className="h-full">
+          <div className="flex h-full items-center gap-3">
+            <Link to="/" className="flex shrink-0 items-center gap-2" aria-label="Billionaires Computers home">
+              <img
+                src="/brand/logo.svg"
+                alt="Billionaires Computers logo"
+                style={{ height: '40px', width: 'auto' }}
+              />
+              <span style={{ fontSize: '20px', fontWeight: 600 }} className="hidden sm:block">
+                {store.name}
               </span>
             </Link>
 
-            {/* Search */}
-            <div ref={searchRef} className="relative hidden flex-1 md:block">
-              <form onSubmit={submitSearch}>
-                <div className="group relative flex items-center overflow-hidden rounded-xl border border-line bg-canvas-raised/70 transition-colors focus-within:border-brand-400/70 focus-within:bg-canvas-raised">
-                  <Icon.Search className="pointer-events-none absolute left-3 size-4 text-ink-subtle transition-colors group-focus-within:text-brand-oncanvas" />
-                  <input
-                    type="search"
-                    value={query}
-                    onChange={(e) => {
-                      setQuery(e.target.value)
-                      setSuggestOpen(true)
-                    }}
-                    onFocus={() => setSuggestOpen(true)}
-                    placeholder="Search laptops, monitors, keyboards…"
-                    aria-label="Search products"
-                    className="w-full bg-transparent py-2.5 pr-24 pl-9 text-sm text-ink outline-none placeholder:text-ink-subtle"
-                  />
-                  <button
-                    type="submit"
-                    className="absolute right-1.5 my-0.5 rounded-lg bg-surface-inset px-3 py-1.5 text-xs font-semibold text-body transition hover:bg-brand-600 hover:text-ink"
-                  >
-                    Search
-                  </button>
-                </div>
+            <div className="hidden md:flex flex-1 items-center">
+              <form onSubmit={submitSearch} className="flex w-full max-w-2xl items-stretch">
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  style={{
+                    border: '1px solid var(--color-border)',
+                    borderRight: 'none',
+                    borderRadius: '8px 0 0 8px',
+                    background: 'var(--color-surface)',
+                    fontSize: '16px',
+                    padding: '0 12px',
+                    height: '44px',
+                  }}
+                  aria-label="Select category"
+                >
+                  <option>All Categories</option>
+                  {categoryItems.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search..."
+                  aria-label="Search products"
+                  style={{
+                    border: '1px solid var(--color-border)',
+                    borderRight: 'none',
+                    borderRadius: 0,
+                    background: 'var(--color-surface)',
+                    fontSize: '16px',
+                    padding: '0 12px',
+                    flex: 1,
+                    height: '44px',
+                  }}
+                />
+                <button
+                  type="submit"
+                  style={{
+                    background: 'var(--color-cta)',
+                    color: 'var(--color-cta-text)',
+                    border: '1px solid var(--color-cta)',
+                    borderRadius: '0 8px 8px 0',
+                    height: '44px',
+                    padding: '0 20px',
+                    fontSize: '14px',
+                  }}
+                  aria-label="Search"
+                >
+                  Search
+                </button>
               </form>
-
-              <AnimatePresence>
-                {suggestOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -8, scale: 0.98 }}
-                    transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                    className="panel absolute top-full right-0 left-0 z-50 mt-2 overflow-hidden p-1.5"
-                  >
-                    <p className="px-3 py-1.5 text-[10px] font-semibold tracking-[0.16em] text-ink-subtle uppercase">
-                      Popular searches
-                    </p>
-                    {suggestions.map((term) => (
-                      <button
-                        key={term}
-                        onClick={() => goToSuggestion(term)}
-                        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-body transition hover:bg-surface-inset hover:text-ink"
-                      >
-                        <Icon.Search className="size-3.5 text-ink-subtle" />
-                        {term}
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
             </div>
 
-            {/* Actions */}
-            <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
+            <div className="ml-auto flex items-center gap-2">
               <Link
                 to="/account"
-                className="btn-ghost btn-sm hidden lg:inline-flex"
-                aria-label="Your account"
+                className="flex items-center gap-1"
+                style={{ color: 'var(--color-text)', minHeight: '44px', padding: '0 8px' }}
+                aria-label="Account"
               >
-                <Icon.User className="size-4" />
-                <span className="hidden xl:inline">Account</span>
-              </Link>
-
-              <button
-                onClick={() => setCartOpen(true)}
-                className="btn-ghost btn-sm relative"
-                aria-label={`Cart, ${itemCount} items`}
-              >
-                <span className="relative">
-                  <Icon.Cart className="size-4" />
-                  <AnimatePresence>
-                    {itemCount > 0 && (
-                      <motion.span
-                        key={itemCount}
-                        initial={{ scale: 0.4, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.4, opacity: 0 }}
-                        transition={{ type: 'spring', stiffness: 520, damping: 20 }}
-                        className="absolute -top-2 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-linear-to-br from-brand-500 to-accent-500 px-1 text-[10px] font-bold text-ink-onbrand tabular-nums ring-2 ring-canvas"
-                      >
-                        {itemCount}
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                </span>
-                <span className="hidden sm:inline">Cart</span>
-              </button>
-
-
-              <button
-                onClick={() => setMenuOpen(true)}
-                className="btn-ghost btn-sm sm:hidden"
-                aria-label="Open menu"
-              >
-                <Icon.Menu className="size-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Desktop nav */}
-        <nav
-          className={`hidden border-t border-line-faint transition-all duration-500 sm:block ${
-            scrolled ? 'opacity-100' : 'opacity-90'
-          }`}
-        >
-          <div className="mx-auto flex max-w-7xl items-center gap-1 px-4 sm:px-6 lg:px-8">
-            {NAV.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === '/'}
-                className={({ isActive }) =>
-                  `relative px-3 py-2.5 text-sm font-medium transition-colors ${
-                    isActive ? 'text-ink' : 'text-ink-muted hover:text-ink'
-                  }`
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    {item.label}
-                    {isActive && (
-                      <motion.span
-                        layoutId="nav-underline"
-                        className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-linear-to-r from-brand-400 to-accent-400"
-                        transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                      />
-                    )}
-                  </>
-                )}
-              </NavLink>
-            ))}
-
-            <span className="ml-auto hidden items-center gap-1.5 text-xs text-ink-subtle lg:flex">
-              <span className="relative flex size-1.5">
-                <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-                <span className="relative inline-flex size-1.5 rounded-full bg-emerald-400" />
-              </span>
-              4,812 orders shipped this week
-            </span>
-          </div>
-        </nav>
-      </motion.header>
-
-      {/* Mobile menu */}
-      <Drawer
-        open={menuOpen}
-        onClose={() => setMenuOpen(false)}
-        title="Menu"
-        footer={
-          <Link to="/shop" className="btn-primary w-full">
-            <Icon.Grid className="size-4" />
-            Browse the shop
-          </Link>
-        }
-      >
-        <nav className="space-y-1">
-          {NAV.map((item, i) => (
-            <motion.div
-              key={item.to}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.06 + i * 0.05, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-            >
-              <NavLink
-                to={item.to}
-                end={item.to === '/'}
-                className={({ isActive }) =>
-                  `flex items-center justify-between rounded-xl px-4 py-3 text-base font-semibold transition ${
-                    isActive
-                      ? 'bg-brand-500/15 text-ink ring-1 ring-brand-400/40'
-                      : 'text-body hover:bg-surface-inset'
-                  }`
-                }
-              >
-                {item.label}
-                <Icon.ChevronRight className="size-4 text-ink-subtle" />
-              </NavLink>
-            </motion.div>
-          ))}
-        </nav>
-
-        <form
-          onSubmit={submitSearch}
-          className="mt-5 md:hidden"
-        >
-          <div className="relative">
-            <Icon.Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-subtle" />
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search products…"
-              aria-label="Search products"
-              className="input pl-9"
-            />
-          </div>
-        </form>
-
-        <div className="mt-5 space-y-1 border-t border-line-faint pt-4">
-          {[
-            { to: '/account', label: 'Your account', icon: Icon.User },
-            { to: '/cart', label: 'Shopping cart', icon: Icon.Cart },
-            { to: '/support', label: 'Help & support', icon: Icon.Info },
-          ].map(({ to, label, icon: I }) => (
-            <Link
-              key={to}
-              to={to}
-              className="flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm text-body transition hover:bg-surface-inset hover:text-ink"
-            >
-              <I className="size-4" />
-              {label}
-            </Link>
-          ))}
-        </div>
-      </Drawer>
-
-      {/* Mini cart */}
-      <Drawer
-        open={cartOpen}
-        onClose={() => setCartOpen(false)}
-        title={`Your cart (${itemCount})`}
-        footer={
-          cartProducts.length === 0 ? undefined : (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-ink-muted">Subtotal</span>
-                <span className="font-display text-lg font-extrabold text-ink">
-                  {moneyExact(subtotal)}
-                </span>
-              </div>
-              <Link
-                to="/checkout"
-                onClick={() => setCartOpen(false)}
-                className="btn-primary sheen w-full"
-              >
-                Checkout
-                <Icon.ArrowRight className="size-4" />
+                <Icon.User style={{ width: '20px', height: '20px' }} />
+                <span className="hidden lg:inline">Login / Signup</span>
               </Link>
               <Link
                 to="/cart"
-                onClick={() => setCartOpen(false)}
-                className="btn-quiet w-full text-xs"
+                className="flex items-center gap-1 relative"
+                style={{ color: 'var(--color-text)', minHeight: '44px', padding: '0 8px' }}
+                aria-label={`Cart, ${itemCount} items`}
               >
-                View full cart
+                <Icon.Cart style={{ width: '20px', height: '20px' }} />
+                <span className="hidden lg:inline">Cart</span>
+                {itemCount > 0 && (
+                  <span
+                    style={{
+                      background: 'var(--color-accent)',
+                      color: '#ffffff',
+                      borderRadius: '9999px',
+                      minWidth: '20px',
+                      height: '20px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '12px',
+                      position: 'absolute',
+                      top: '0',
+                      right: '0',
+                    }}
+                    aria-label={`${itemCount} items in cart`}
+                  >
+                    {itemCount}
+                  </span>
+                )}
               </Link>
+              <button
+                onClick={() => setMobileMenuOpen(true)}
+                className="md:hidden"
+                style={{ color: 'var(--color-text)', minHeight: '44px', minWidth: '44px' }}
+                aria-label="Open menu"
+                aria-expanded={mobileMenuOpen}
+              >
+                <Icon.Menu style={{ width: '24px', height: '24px' }} />
+              </button>
             </div>
-          )
-        }
+          </div>
+          <div className="md:hidden pb-2">
+            <form onSubmit={submitSearch} className="flex items-stretch">
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search..."
+                aria-label="Search products"
+                style={{
+                  border: '1px solid var(--color-border)',
+                  borderRight: 'none',
+                  borderRadius: '8px 0 0 8px',
+                  background: 'var(--color-surface)',
+                  fontSize: '16px',
+                  padding: '0 12px',
+                  flex: 1,
+                  height: '44px',
+                }}
+              />
+              <button
+                type="submit"
+                style={{
+                  background: 'var(--color-cta)',
+                  color: 'var(--color-cta-text)',
+                  border: '1px solid var(--color-cta)',
+                  borderRadius: '0 8px 8px 0',
+                  height: '44px',
+                  padding: '0 16px',
+                  fontSize: '14px',
+                }}
+                aria-label="Search"
+              >
+                Search
+              </button>
+            </form>
+          </div>
+        </Container>
+      </header>
+
+      <nav
+        style={{
+          background: 'var(--color-surface)',
+          borderBottom: '1px solid var(--color-border)',
+          height: '44px',
+        }}
+        className="hidden lg:block"
+        aria-label="Category navigation"
       >
-        {cartProducts.length === 0 ? (
-          <div className="py-10 text-center">
-            <span className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl border border-line bg-surface-inset text-ink-subtle">
-              <Icon.Cart className="size-6" />
-            </span>
-            <p className="text-sm text-ink-muted">Nothing in here yet.</p>
+        <Container className="h-full">
+          <div className="flex h-full items-center gap-6">
+            {categoryItems.map((cat) => (
+              <Link
+                key={cat}
+                to={`/shop?category=${encodeURIComponent(cat)}`}
+                style={{ color: 'var(--color-text)', fontSize: '15px', height: '44px', display: 'flex', alignItems: 'center' }}
+              >
+                {cat}
+              </Link>
+            ))}
+            {(moreItems.length > 0 || (categories && categories.length > 6)) && (
+              <div
+                ref={categoryDropdownRef}
+                className="relative"
+                onMouseEnter={() => setCategoryDropdownOpen(true)}
+                onMouseLeave={() => setCategoryDropdownOpen(false)}
+              >
+                <button
+                  onClick={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setCategoryDropdownOpen(!categoryDropdownOpen)
+                    }
+                  }}
+                  style={{ color: 'var(--color-text)', fontSize: '15px', height: '44px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  aria-expanded={categoryDropdownOpen}
+                  aria-haspopup="true"
+                >
+                  More Categories
+                  <span>▾</span>
+                </button>
+                {categoryDropdownOpen && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '44px',
+                      left: '0',
+                      background: 'var(--color-surface)',
+                      border: '1px solid var(--color-border)',
+                      minWidth: '200px',
+                      zIndex: 50,
+                    }}
+                  >
+                    {moreItems.map((cat) => (
+                      <Link
+                        key={cat}
+                        to={`/shop?category=${encodeURIComponent(cat)}`}
+                        style={{ display: 'block', padding: '8px 16px', color: 'var(--color-text)', fontSize: '15px', height: '44px', lineHeight: '44px' }}
+                        onClick={() => setCategoryDropdownOpen(false)}
+                      >
+                        {cat}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <Link
-              to="/shop"
-              onClick={() => setCartOpen(false)}
-              className="btn-ghost btn-sm mt-4"
+              to="/support"
+              style={{ color: 'var(--color-text)', fontSize: '15px', height: '44px', display: 'flex', alignItems: 'center' }}
             >
-              Find something good
+              Contact Us
             </Link>
           </div>
-        ) : (
-          <ul className="space-y-2">
-            <AnimatePresence initial={false}>
-              {cartProducts.map(({ product, quantity }) => (
-                <motion.li
-                  key={product.id}
-                  layout
-                  initial={{ opacity: 0, x: 24 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 24, height: 0, marginBottom: 0 }}
-                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                  className="flex gap-3 rounded-xl border border-line-faint bg-surface-inset p-2.5"
-                >
-                  <Link
-                    to={`/product/${product.slug}`}
-                    onClick={() => setCartOpen(false)}
-                    className="size-14 shrink-0 overflow-hidden rounded-lg bg-ink"
-                  >
-                    <ProductThumb product={product} />
-                  </Link>
-                  <div className="min-w-0 flex-1">
-                    <Link
-                      to={`/product/${product.slug}`}
-                      onClick={() => setCartOpen(false)}
-                      className="line-clamp-2 text-sm font-semibold text-ink transition hover:text-brand-oncanvas"
-                    >
-                      {product.name}
-                    </Link>
-                    <p className="mt-0.5 text-xs text-ink-subtle">Qty {quantity}</p>
-                  </div>
-                  <span className="shrink-0 text-sm font-bold text-ink">
-                    {moneyExact(product.price * quantity)}
-                  </span>
-                </motion.li>
-              ))}
-            </AnimatePresence>
-          </ul>
-        )}
-      </Drawer>
+        </Container>
+      </nav>
 
-      {/* Nudge that appears once there is something worth checking out */}
-      <CartNudge
-        visible={itemCount > 0 && scrolled}
-        count={itemCount}
-        subtotal={subtotal}
-        onOpen={() => setCartOpen(true)}
-        onViewCart={() => {
-          setCartOpen(false)
-          navigate('/cart')
-        }}
-      />
-    </>
-  )
-}
-
-/* -------------------------------------------------------------------------- */
-
-function CartNudge({
-  visible,
-  count,
-  subtotal,
-  onOpen,
-  onViewCart,
-}: {
-  visible: boolean
-  count: number
-  subtotal: number
-  onOpen: () => void
-  onViewCart: () => void
-}) {
-  return (
-    <AnimatePresence>
-      {visible && (
-        <motion.div
-          initial={{ opacity: 0, y: 30, scale: 0.9 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 30, scale: 0.9 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 26 }}
-          className="panel fixed bottom-5 left-5 z-40 hidden items-center gap-3 px-4 py-3 md:flex"
-        >
-          <span className="flex size-9 items-center justify-center rounded-lg bg-brand-500/20 text-brand-oncanvas">
-            <Icon.Cart className="size-4" />
-          </span>
-          <button onClick={onOpen} className="text-left">
-            <span className="block text-xs text-ink-muted">
-              {count} {count === 1 ? 'item' : 'items'} reserved
-            </span>
-            <span className="block font-display text-base font-extrabold text-ink">
-              {moneyExact(subtotal)}
-            </span>
-          </button>
-          <button onClick={onViewCart} className="btn-primary btn-sm ml-1">
-            View cart
-          </button>
-        </motion.div>
+      {mobileMenuOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'var(--color-overlay)',
+            zIndex: 100,
+          }}
+          onClick={() => setMobileMenuOpen(false)}
+          aria-hidden="true"
+        />
       )}
-    </AnimatePresence>
+      <div
+        ref={mobileMenuRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Mobile menu"
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          height: '100vh',
+          width: '280px',
+          background: 'var(--color-surface)',
+          borderRight: '1px solid var(--color-border)',
+          zIndex: 101,
+          transform: mobileMenuOpen ? 'translateX(0)' : 'translateX(-100%)',
+          transition: 'transform 0.3s ease',
+          display: 'flex',
+          flexDirection: 'column',
+          overflowY: 'auto',
+        }}
+      >
+        <div
+          style={{
+            padding: '16px',
+            borderBottom: '1px solid var(--color-border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <span style={{ fontWeight: 600 }}>Menu</span>
+          <button
+            ref={firstFocusRef}
+            onClick={() => setMobileMenuOpen(false)}
+            style={{ minHeight: '44px', minWidth: '44px' }}
+            aria-label="Close menu"
+          >
+            ✕
+          </button>
+        </div>
+        <nav style={{ padding: '16px', flex: 1 }}>
+          {categoryItems.map((cat) => (
+            <Link
+              key={cat}
+              to={`/shop?category=${encodeURIComponent(cat)}`}
+              onClick={() => setMobileMenuOpen(false)}
+              style={{
+                display: 'block',
+                padding: '12px 0',
+                color: 'var(--color-text)',
+                fontSize: '15px',
+                height: '44px',
+                lineHeight: '44px',
+              }}
+            >
+              {cat}
+            </Link>
+          ))}
+          {moreItems.map((cat) => (
+            <Link
+              key={cat}
+              to={`/shop?category=${encodeURIComponent(cat)}`}
+              onClick={() => setMobileMenuOpen(false)}
+              style={{
+                display: 'block',
+                padding: '12px 0',
+                color: 'var(--color-text)',
+                fontSize: '15px',
+                height: '44px',
+                lineHeight: '44px',
+              }}
+            >
+              {cat}
+            </Link>
+          ))}
+          <Link
+            to="/support"
+            onClick={() => setMobileMenuOpen(false)}
+            style={{
+              display: 'block',
+              padding: '12px 0',
+              color: 'var(--color-text)',
+              fontSize: '15px',
+              height: '44px',
+              lineHeight: '44px',
+              borderTop: '1px solid var(--color-border)',
+              marginTop: '8px',
+              paddingTop: '16px',
+            }}
+          >
+            Contact Us
+          </Link>
+        </nav>
+        <div style={{ padding: '16px', borderTop: '1px solid var(--color-border)' }}>
+          <Link
+            ref={lastFocusRef}
+            to="/account"
+            onClick={() => setMobileMenuOpen(false)}
+            style={{
+              display: 'block',
+              padding: '12px 0',
+              color: 'var(--color-text)',
+              fontSize: '15px',
+              height: '44px',
+              lineHeight: '44px',
+            }}
+          >
+            Login / Signup
+          </Link>
+        </div>
+      </div>
+
+      <style>{`
+        .skip-to-content {
+          position: absolute;
+          left: -10000px;
+          top: auto;
+          width: 1px;
+          height: 1px;
+          overflow: hidden;
+        }
+        .skip-to-content:focus {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: auto;
+          height: auto;
+          overflow: visible;
+          background: var(--color-accent);
+          color: #ffffff;
+          padding: 8px 16px;
+          z-index: 1000;
+          text-decoration: none;
+          outline: 2px solid var(--color-focus);
+          outline-offset: 2px;
+        }
+      `}</style>
+    </>
   )
 }
